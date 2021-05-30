@@ -16,8 +16,8 @@ package io.reactivex.internal.operators.observable;
 import static org.junit.Assert.*;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
 
 import org.junit.*;
 
@@ -31,7 +31,6 @@ import io.reactivex.internal.functions.Functions;
 import io.reactivex.observers.*;
 import io.reactivex.schedulers.*;
 import io.reactivex.subjects.*;
-
 
 public class ObservableWindowWithTimeTest {
 
@@ -65,17 +64,19 @@ public class ObservableWindowWithTimeTest {
         Observable<Observable<String>> windowed = source.window(100, TimeUnit.MILLISECONDS, scheduler, 2);
         windowed.subscribe(observeWindow(list, lists));
 
-        scheduler.advanceTimeTo(100, TimeUnit.MILLISECONDS);
+        scheduler.advanceTimeTo(95, TimeUnit.MILLISECONDS);
         assertEquals(1, lists.size());
         assertEquals(lists.get(0), list("one", "two"));
 
-        scheduler.advanceTimeTo(200, TimeUnit.MILLISECONDS);
-        assertEquals(2, lists.size());
-        assertEquals(lists.get(1), list("three", "four"));
+        scheduler.advanceTimeTo(195, TimeUnit.MILLISECONDS);
+        assertEquals(3, lists.size());
+        assertTrue(lists.get(1).isEmpty());
+        assertEquals(lists.get(2), list("three", "four"));
 
         scheduler.advanceTimeTo(300, TimeUnit.MILLISECONDS);
-        assertEquals(3, lists.size());
-        assertEquals(lists.get(2), list("five"));
+        assertEquals(5, lists.size());
+        assertTrue(lists.get(3).isEmpty());
+        assertEquals(lists.get(4), list("five"));
     }
 
     @Test
@@ -158,6 +159,7 @@ public class ObservableWindowWithTimeTest {
             }
         };
     }
+
     @Test
     public void testExactWindowSize() {
         Observable<Observable<Integer>> source = Observable.range(1, 10)
@@ -181,7 +183,7 @@ public class ObservableWindowWithTimeTest {
 
     @Test
     public void testTakeFlatMapCompletes() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
         final AtomicInteger wip = new AtomicInteger();
 
@@ -215,11 +217,11 @@ public class ObservableWindowWithTimeTest {
                 System.out.println(pv);
             }
         })
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.awaitTerminalEvent(5, TimeUnit.SECONDS);
-        ts.assertComplete();
-        Assert.assertTrue(ts.valueCount() != 0);
+        to.awaitTerminalEvent(5, TimeUnit.SECONDS);
+        to.assertComplete();
+        Assert.assertTrue(to.valueCount() != 0);
     }
 
     @Test
@@ -306,107 +308,107 @@ public class ObservableWindowWithTimeTest {
     public void timeskipSkipping() {
         TestScheduler scheduler = new TestScheduler();
 
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        TestObserver<Integer> ts = pp.window(1, 2, TimeUnit.SECONDS, scheduler)
+        TestObserver<Integer> to = ps.window(1, 2, TimeUnit.SECONDS, scheduler)
         .flatMap(Functions.<Observable<Integer>>identity())
         .test();
 
-        pp.onNext(1);
-        pp.onNext(2);
+        ps.onNext(1);
+        ps.onNext(2);
 
         scheduler.advanceTimeBy(1, TimeUnit.SECONDS);
 
-        pp.onNext(3);
-        pp.onNext(4);
+        ps.onNext(3);
+        ps.onNext(4);
 
         scheduler.advanceTimeBy(1, TimeUnit.SECONDS);
 
-        pp.onNext(5);
-        pp.onNext(6);
+        ps.onNext(5);
+        ps.onNext(6);
 
         scheduler.advanceTimeBy(1, TimeUnit.SECONDS);
 
-        pp.onNext(7);
-        pp.onComplete();
+        ps.onNext(7);
+        ps.onComplete();
 
-        ts.assertResult(1, 2, 5, 6);
+        to.assertResult(1, 2, 5, 6);
     }
 
     @Test
     public void timeskipOverlapping() {
         TestScheduler scheduler = new TestScheduler();
 
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        TestObserver<Integer> ts = pp.window(2, 1, TimeUnit.SECONDS, scheduler)
+        TestObserver<Integer> to = ps.window(2, 1, TimeUnit.SECONDS, scheduler)
         .flatMap(Functions.<Observable<Integer>>identity())
         .test();
 
-        pp.onNext(1);
-        pp.onNext(2);
+        ps.onNext(1);
+        ps.onNext(2);
 
         scheduler.advanceTimeBy(1, TimeUnit.SECONDS);
 
-        pp.onNext(3);
-        pp.onNext(4);
+        ps.onNext(3);
+        ps.onNext(4);
 
         scheduler.advanceTimeBy(1, TimeUnit.SECONDS);
 
-        pp.onNext(5);
-        pp.onNext(6);
+        ps.onNext(5);
+        ps.onNext(6);
 
         scheduler.advanceTimeBy(1, TimeUnit.SECONDS);
 
-        pp.onNext(7);
-        pp.onComplete();
+        ps.onNext(7);
+        ps.onComplete();
 
-        ts.assertResult(1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7);
+        to.assertResult(1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7);
     }
 
     @Test
     public void exactOnError() {
         TestScheduler scheduler = new TestScheduler();
 
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        TestObserver<Integer> ts = pp.window(1, 1, TimeUnit.SECONDS, scheduler)
+        TestObserver<Integer> to = ps.window(1, 1, TimeUnit.SECONDS, scheduler)
         .flatMap(Functions.<Observable<Integer>>identity())
         .test();
 
-        pp.onError(new TestException());
+        ps.onError(new TestException());
 
-        ts.assertFailure(TestException.class);
+        to.assertFailure(TestException.class);
     }
 
     @Test
     public void overlappingOnError() {
         TestScheduler scheduler = new TestScheduler();
 
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        TestObserver<Integer> ts = pp.window(2, 1, TimeUnit.SECONDS, scheduler)
+        TestObserver<Integer> to = ps.window(2, 1, TimeUnit.SECONDS, scheduler)
         .flatMap(Functions.<Observable<Integer>>identity())
         .test();
 
-        pp.onError(new TestException());
+        ps.onError(new TestException());
 
-        ts.assertFailure(TestException.class);
+        to.assertFailure(TestException.class);
     }
 
     @Test
     public void skipOnError() {
         TestScheduler scheduler = new TestScheduler();
 
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        TestObserver<Integer> ts = pp.window(1, 2, TimeUnit.SECONDS, scheduler)
+        TestObserver<Integer> to = ps.window(1, 2, TimeUnit.SECONDS, scheduler)
         .flatMap(Functions.<Observable<Integer>>identity())
         .test();
 
-        pp.onError(new TestException());
+        ps.onError(new TestException());
 
-        ts.assertFailure(TestException.class);
+        to.assertFailure(TestException.class);
     }
 
     @Test
@@ -591,17 +593,17 @@ public class ObservableWindowWithTimeTest {
         TestScheduler scheduler = new TestScheduler();
         Subject<Integer> ps = PublishSubject.<Integer>create();
 
-        TestObserver<Observable<Integer>> ts = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 100)
+        TestObserver<Observable<Integer>> to = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 100)
         .test()
         .assertValueCount(1);
 
         scheduler.advanceTimeBy(5, TimeUnit.MILLISECONDS);
 
-        ts.assertValueCount(2)
+        to.assertValueCount(2)
         .assertNoErrors()
         .assertNotComplete();
 
-        ts.values().get(0).test().assertResult();
+        to.values().get(0).test().assertResult();
     }
 
     @Test
@@ -609,12 +611,12 @@ public class ObservableWindowWithTimeTest {
         TestScheduler scheduler = new TestScheduler();
         Subject<Integer> ps = PublishSubject.<Integer>create();
 
-        TestObserver<Observable<Integer>> ts = ps.window(5, TimeUnit.MILLISECONDS, scheduler, Long.MAX_VALUE, false)
+        TestObserver<Observable<Integer>> to = ps.window(5, TimeUnit.MILLISECONDS, scheduler, Long.MAX_VALUE, false)
         .test();
 
         scheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
 
-        ts.assertValueCount(21)
+        to.assertValueCount(21)
         .assertNoErrors()
         .assertNotComplete();
     }
@@ -624,12 +626,12 @@ public class ObservableWindowWithTimeTest {
         TestScheduler scheduler = new TestScheduler();
         Subject<Integer> ps = PublishSubject.<Integer>create();
 
-        TestObserver<Observable<Integer>> ts = ps.window(5, TimeUnit.MILLISECONDS, scheduler, Long.MAX_VALUE, true)
+        TestObserver<Observable<Integer>> to = ps.window(5, TimeUnit.MILLISECONDS, scheduler, Long.MAX_VALUE, true)
         .test();
 
         scheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
 
-        ts.assertValueCount(21)
+        to.assertValueCount(21)
         .assertNoErrors()
         .assertNotComplete();
     }
@@ -639,12 +641,12 @@ public class ObservableWindowWithTimeTest {
         TestScheduler scheduler = new TestScheduler();
         Subject<Integer> ps = PublishSubject.<Integer>create();
 
-        TestObserver<Observable<Integer>> ts = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 5, false)
+        TestObserver<Observable<Integer>> to = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 5, false)
         .test();
 
         scheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
 
-        ts.assertValueCount(21)
+        to.assertValueCount(21)
         .assertNoErrors()
         .assertNotComplete();
     }
@@ -654,12 +656,12 @@ public class ObservableWindowWithTimeTest {
         TestScheduler scheduler = new TestScheduler();
         Subject<Integer> ps = PublishSubject.<Integer>create();
 
-        TestObserver<Observable<Integer>> ts = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 5, true)
+        TestObserver<Observable<Integer>> to = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 5, true)
         .test();
 
         scheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
 
-        ts.assertValueCount(21)
+        to.assertValueCount(21)
         .assertNoErrors()
         .assertNotComplete();
     }
@@ -669,7 +671,7 @@ public class ObservableWindowWithTimeTest {
         TestScheduler scheduler = new TestScheduler();
         Subject<Integer> ps = PublishSubject.<Integer>create();
 
-        TestObserver<Observable<Integer>> ts = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 2, true)
+        TestObserver<Observable<Integer>> to = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 2, true)
         .test();
 
         ps.onNext(1);
@@ -677,7 +679,7 @@ public class ObservableWindowWithTimeTest {
 
         scheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
 
-        ts.assertValueCount(22)
+        to.assertValueCount(22)
         .assertNoErrors()
         .assertNotComplete();
     }
@@ -687,7 +689,7 @@ public class ObservableWindowWithTimeTest {
         TestScheduler scheduler = new TestScheduler();
         Subject<Integer> ps = PublishSubject.<Integer>create();
 
-        TestObserver<Observable<Integer>> ts = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 5, true)
+        TestObserver<Observable<Integer>> to = ps.window(5, TimeUnit.MILLISECONDS, scheduler, 5, true)
         .test();
 
         // window #1
@@ -702,8 +704,248 @@ public class ObservableWindowWithTimeTest {
         ps.onNext(5);
         ps.onNext(6);
 
-        ts.assertValueCount(2)
+        to.assertValueCount(2)
         .assertNoErrors()
         .assertNotComplete();
+    }
+
+    @Test
+    public void exactTimeBoundNoInterruptWindowOutputOnComplete() throws Exception {
+        final AtomicBoolean isInterrupted = new AtomicBoolean();
+
+        final PublishSubject<Integer> ps = PublishSubject.create();
+
+        final CountDownLatch doOnNextDone = new CountDownLatch(1);
+        final CountDownLatch secondWindowProcessing = new CountDownLatch(1);
+
+        ps.window(100, TimeUnit.MILLISECONDS)
+        .doOnNext(new Consumer<Observable<Integer>>() {
+            int count;
+            @Override
+            public void accept(Observable<Integer> v) throws Exception {
+                System.out.println(Thread.currentThread());
+                if (count++ == 1) {
+                    secondWindowProcessing.countDown();
+                    try {
+                        Thread.sleep(200);
+                        isInterrupted.set(Thread.interrupted());
+                    } catch (InterruptedException ex) {
+                        isInterrupted.set(true);
+                    }
+                    doOnNextDone.countDown();
+                }
+            }
+        })
+        .test();
+
+        ps.onNext(1);
+
+        assertTrue(secondWindowProcessing.await(5, TimeUnit.SECONDS));
+
+        ps.onComplete();
+
+        assertTrue(doOnNextDone.await(5, TimeUnit.SECONDS));
+
+        assertFalse("The doOnNext got interrupted!", isInterrupted.get());
+    }
+
+    @Test
+    public void exactTimeBoundNoInterruptWindowOutputOnError() throws Exception {
+        final AtomicBoolean isInterrupted = new AtomicBoolean();
+
+        final PublishSubject<Integer> ps = PublishSubject.create();
+
+        final CountDownLatch doOnNextDone = new CountDownLatch(1);
+        final CountDownLatch secondWindowProcessing = new CountDownLatch(1);
+
+        ps.window(100, TimeUnit.MILLISECONDS)
+        .doOnNext(new Consumer<Observable<Integer>>() {
+            int count;
+            @Override
+            public void accept(Observable<Integer> v) throws Exception {
+                System.out.println(Thread.currentThread());
+                if (count++ == 1) {
+                    secondWindowProcessing.countDown();
+                    try {
+                        Thread.sleep(200);
+                        isInterrupted.set(Thread.interrupted());
+                    } catch (InterruptedException ex) {
+                        isInterrupted.set(true);
+                    }
+                    doOnNextDone.countDown();
+                }
+            }
+        })
+        .test();
+
+        ps.onNext(1);
+
+        assertTrue(secondWindowProcessing.await(5, TimeUnit.SECONDS));
+
+        ps.onError(new TestException());
+
+        assertTrue(doOnNextDone.await(5, TimeUnit.SECONDS));
+
+        assertFalse("The doOnNext got interrupted!", isInterrupted.get());
+    }
+
+    @Test
+    public void exactTimeAndSizeBoundNoInterruptWindowOutputOnComplete() throws Exception {
+        final AtomicBoolean isInterrupted = new AtomicBoolean();
+
+        final PublishSubject<Integer> ps = PublishSubject.create();
+
+        final CountDownLatch doOnNextDone = new CountDownLatch(1);
+        final CountDownLatch secondWindowProcessing = new CountDownLatch(1);
+
+        ps.window(100, TimeUnit.MILLISECONDS, 10)
+        .doOnNext(new Consumer<Observable<Integer>>() {
+            int count;
+            @Override
+            public void accept(Observable<Integer> v) throws Exception {
+                System.out.println(Thread.currentThread());
+                if (count++ == 1) {
+                    secondWindowProcessing.countDown();
+                    try {
+                        Thread.sleep(200);
+                        isInterrupted.set(Thread.interrupted());
+                    } catch (InterruptedException ex) {
+                        isInterrupted.set(true);
+                    }
+                    doOnNextDone.countDown();
+                }
+            }
+        })
+        .test();
+
+        ps.onNext(1);
+
+        assertTrue(secondWindowProcessing.await(5, TimeUnit.SECONDS));
+
+        ps.onComplete();
+
+        assertTrue(doOnNextDone.await(5, TimeUnit.SECONDS));
+
+        assertFalse("The doOnNext got interrupted!", isInterrupted.get());
+    }
+
+    @Test
+    public void exactTimeAndSizeBoundNoInterruptWindowOutputOnError() throws Exception {
+        final AtomicBoolean isInterrupted = new AtomicBoolean();
+
+        final PublishSubject<Integer> ps = PublishSubject.create();
+
+        final CountDownLatch doOnNextDone = new CountDownLatch(1);
+        final CountDownLatch secondWindowProcessing = new CountDownLatch(1);
+
+        ps.window(100, TimeUnit.MILLISECONDS, 10)
+        .doOnNext(new Consumer<Observable<Integer>>() {
+            int count;
+            @Override
+            public void accept(Observable<Integer> v) throws Exception {
+                System.out.println(Thread.currentThread());
+                if (count++ == 1) {
+                    secondWindowProcessing.countDown();
+                    try {
+                        Thread.sleep(200);
+                        isInterrupted.set(Thread.interrupted());
+                    } catch (InterruptedException ex) {
+                        isInterrupted.set(true);
+                    }
+                    doOnNextDone.countDown();
+                }
+            }
+        })
+        .test();
+
+        ps.onNext(1);
+
+        assertTrue(secondWindowProcessing.await(5, TimeUnit.SECONDS));
+
+        ps.onError(new TestException());
+
+        assertTrue(doOnNextDone.await(5, TimeUnit.SECONDS));
+
+        assertFalse("The doOnNext got interrupted!", isInterrupted.get());
+    }
+
+    @Test
+    public void skipTimeAndSizeBoundNoInterruptWindowOutputOnComplete() throws Exception {
+        final AtomicBoolean isInterrupted = new AtomicBoolean();
+
+        final PublishSubject<Integer> ps = PublishSubject.create();
+
+        final CountDownLatch doOnNextDone = new CountDownLatch(1);
+        final CountDownLatch secondWindowProcessing = new CountDownLatch(1);
+
+        ps.window(90, 100, TimeUnit.MILLISECONDS)
+        .doOnNext(new Consumer<Observable<Integer>>() {
+            int count;
+            @Override
+            public void accept(Observable<Integer> v) throws Exception {
+                System.out.println(Thread.currentThread());
+                if (count++ == 1) {
+                    secondWindowProcessing.countDown();
+                    try {
+                        Thread.sleep(200);
+                        isInterrupted.set(Thread.interrupted());
+                    } catch (InterruptedException ex) {
+                        isInterrupted.set(true);
+                    }
+                    doOnNextDone.countDown();
+                }
+            }
+        })
+        .test();
+
+        ps.onNext(1);
+
+        assertTrue(secondWindowProcessing.await(5, TimeUnit.SECONDS));
+
+        ps.onComplete();
+
+        assertTrue(doOnNextDone.await(5, TimeUnit.SECONDS));
+
+        assertFalse("The doOnNext got interrupted!", isInterrupted.get());
+    }
+
+    @Test
+    public void skipTimeAndSizeBoundNoInterruptWindowOutputOnError() throws Exception {
+        final AtomicBoolean isInterrupted = new AtomicBoolean();
+
+        final PublishSubject<Integer> ps = PublishSubject.create();
+
+        final CountDownLatch doOnNextDone = new CountDownLatch(1);
+        final CountDownLatch secondWindowProcessing = new CountDownLatch(1);
+
+        ps.window(90, 100, TimeUnit.MILLISECONDS)
+        .doOnNext(new Consumer<Observable<Integer>>() {
+            int count;
+            @Override
+            public void accept(Observable<Integer> v) throws Exception {
+                System.out.println(Thread.currentThread());
+                if (count++ == 1) {
+                    secondWindowProcessing.countDown();
+                    try {
+                        Thread.sleep(200);
+                        isInterrupted.set(Thread.interrupted());
+                    } catch (InterruptedException ex) {
+                        isInterrupted.set(true);
+                    }
+                    doOnNextDone.countDown();
+                }
+            }
+        })
+        .test();
+
+        ps.onNext(1);
+
+        assertTrue(secondWindowProcessing.await(5, TimeUnit.SECONDS));
+
+        ps.onError(new TestException());
+
+        assertTrue(doOnNextDone.await(5, TimeUnit.SECONDS));
+
+        assertFalse("The doOnNext got interrupted!", isInterrupted.get());
     }
 }

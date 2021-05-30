@@ -115,6 +115,7 @@ public class AbstractDirectTaskTest {
 
         assertTrue(interrupted[0]);
     }
+
     @Test
     public void setFutureCancelSameThread() {
         AbstractDirectTask task = new AbstractDirectTask(Functions.EMPTY_RUNNABLE) {
@@ -208,7 +209,7 @@ public class AbstractDirectTaskTest {
 
     @Test
     public void disposeSetFutureRace() {
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final AbstractDirectTask task = new AbstractDirectTask(Functions.EMPTY_RUNNABLE) {
                 private static final long serialVersionUID = 208585707945686116L;
             };

@@ -28,15 +28,16 @@ import io.reactivex.subscribers.DefaultSubscriber;
 public class FlowableErrorHandlingTests {
 
     /**
-     * Test that an error from a user provided Observer.onNext is handled and emitted to the onError
+     * Test that an error from a user provided Observer.onNext
+     * is handled and emitted to the onError.
      * @throws InterruptedException if the test is interrupted
      */
     @Test
     public void testOnNextError() throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(1);
         final AtomicReference<Throwable> caughtError = new AtomicReference<Throwable>();
-        Flowable<Long> o = Flowable.interval(50, TimeUnit.MILLISECONDS);
-        Subscriber<Long> observer = new DefaultSubscriber<Long>() {
+        Flowable<Long> f = Flowable.interval(50, TimeUnit.MILLISECONDS);
+        Subscriber<Long> subscriber = new DefaultSubscriber<Long>() {
 
             @Override
             public void onComplete() {
@@ -56,14 +57,15 @@ public class FlowableErrorHandlingTests {
                 throw new RuntimeException("forced failure");
             }
         };
-        o.safeSubscribe(observer);
+        f.safeSubscribe(subscriber);
 
         latch.await(2000, TimeUnit.MILLISECONDS);
         assertNotNull(caughtError.get());
     }
 
     /**
-     * Test that an error from a user provided Observer.onNext is handled and emitted to the onError
+     * Test that an error from a user provided Observer.onNext
+     * is handled and emitted to the onError.
      * even when done across thread boundaries with observeOn
      * @throws InterruptedException if the test is interrupted
      */
@@ -71,8 +73,8 @@ public class FlowableErrorHandlingTests {
     public void testOnNextErrorAcrossThread() throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(1);
         final AtomicReference<Throwable> caughtError = new AtomicReference<Throwable>();
-        Flowable<Long> o = Flowable.interval(50, TimeUnit.MILLISECONDS);
-        Subscriber<Long> observer = new DefaultSubscriber<Long>() {
+        Flowable<Long> f = Flowable.interval(50, TimeUnit.MILLISECONDS);
+        Subscriber<Long> subscriber = new DefaultSubscriber<Long>() {
 
             @Override
             public void onComplete() {
@@ -92,8 +94,8 @@ public class FlowableErrorHandlingTests {
                 throw new RuntimeException("forced failure");
             }
         };
-        o.observeOn(Schedulers.newThread())
-        .safeSubscribe(observer);
+        f.observeOn(Schedulers.newThread())
+        .safeSubscribe(subscriber);
 
         latch.await(2000, TimeUnit.MILLISECONDS);
         assertNotNull(caughtError.get());

@@ -17,8 +17,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import io.reactivex.*;
+import io.reactivex.Scheduler.Worker;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.internal.disposables.*;
+import io.reactivex.internal.schedulers.TrampolineScheduler;
 
 public final class ObservableInterval extends Observable<Long> {
     final Scheduler scheduler;
@@ -34,28 +36,34 @@ public final class ObservableInterval extends Observable<Long> {
     }
 
     @Override
-    public void subscribeActual(Observer<? super Long> s) {
-        IntervalObserver is = new IntervalObserver(s);
-        s.onSubscribe(is);
+    public void subscribeActual(Observer<? super Long> observer) {
+        IntervalObserver is = new IntervalObserver(observer);
+        observer.onSubscribe(is);
 
-        Disposable d = scheduler.schedulePeriodicallyDirect(is, initialDelay, period, unit);
+        Scheduler sch = scheduler;
 
-        is.setResource(d);
+        if (sch instanceof TrampolineScheduler) {
+            Worker worker = sch.createWorker();
+            is.setResource(worker);
+            worker.schedulePeriodically(is, initialDelay, period, unit);
+        } else {
+            Disposable d = sch.schedulePeriodicallyDirect(is, initialDelay, period, unit);
+            is.setResource(d);
+        }
     }
 
     static final class IntervalObserver
     extends AtomicReference<Disposable>
     implements Disposable, Runnable {
 
-
         private static final long serialVersionUID = 346773832286157679L;
 
-        final Observer<? super Long> actual;
+        final Observer<? super Long> downstream;
 
         long count;
 
-        IntervalObserver(Observer<? super Long> actual) {
-            this.actual = actual;
+        IntervalObserver(Observer<? super Long> downstream) {
+            this.downstream = downstream;
         }
 
         @Override
@@ -71,7 +79,7 @@ public final class ObservableInterval extends Observable<Long> {
         @Override
         public void run() {
             if (get() != DisposableHelper.DISPOSED) {
-                actual.onNext(count++);
+                downstream.onNext(count++);
             }
         }
 

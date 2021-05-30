@@ -16,6 +16,7 @@ package io.reactivex.internal.operators.completable;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.util.List;
 
 import org.junit.Test;
 
@@ -23,6 +24,7 @@ import io.reactivex.*;
 import io.reactivex.disposables.*;
 import io.reactivex.exceptions.TestException;
 import io.reactivex.functions.Cancellable;
+import io.reactivex.plugins.RxJavaPlugins;
 
 public class CompletableCreateTest {
 
@@ -33,70 +35,91 @@ public class CompletableCreateTest {
 
     @Test
     public void basic() {
-        final Disposable d = Disposables.empty();
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            final Disposable d = Disposables.empty();
 
-        Completable.create(new CompletableOnSubscribe() {
-            @Override
-            public void subscribe(CompletableEmitter e) throws Exception {
-                e.setDisposable(d);
+            Completable.create(new CompletableOnSubscribe() {
+                @Override
+                public void subscribe(CompletableEmitter e) throws Exception {
+                    e.setDisposable(d);
 
-                e.onComplete();
-                e.onError(new TestException());
-                e.onComplete();
-            }
-        })
-        .test()
-        .assertResult();
+                    e.onComplete();
+                    e.onError(new TestException());
+                    e.onComplete();
+                }
+            })
+            .test()
+            .assertResult();
 
-        assertTrue(d.isDisposed());
+            assertTrue(d.isDisposed());
+
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
+        } finally {
+            RxJavaPlugins.reset();
+        }
     }
 
     @Test
     public void basicWithCancellable() {
-        final Disposable d1 = Disposables.empty();
-        final Disposable d2 = Disposables.empty();
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            final Disposable d1 = Disposables.empty();
+            final Disposable d2 = Disposables.empty();
 
-        Completable.create(new CompletableOnSubscribe() {
-            @Override
-            public void subscribe(CompletableEmitter e) throws Exception {
-                e.setDisposable(d1);
-                e.setCancellable(new Cancellable() {
-                    @Override
-                    public void cancel() throws Exception {
-                        d2.dispose();
-                    }
-                });
+            Completable.create(new CompletableOnSubscribe() {
+                @Override
+                public void subscribe(CompletableEmitter e) throws Exception {
+                    e.setDisposable(d1);
+                    e.setCancellable(new Cancellable() {
+                        @Override
+                        public void cancel() throws Exception {
+                            d2.dispose();
+                        }
+                    });
 
-                e.onComplete();
-                e.onError(new TestException());
-                e.onComplete();
-            }
-        })
-        .test()
-        .assertResult();
+                    e.onComplete();
+                    e.onError(new TestException());
+                    e.onComplete();
+                }
+            })
+            .test()
+            .assertResult();
 
-        assertTrue(d1.isDisposed());
-        assertTrue(d2.isDisposed());
+            assertTrue(d1.isDisposed());
+            assertTrue(d2.isDisposed());
+
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
+        } finally {
+            RxJavaPlugins.reset();
+        }
     }
 
     @Test
     public void basicWithError() {
-        final Disposable d = Disposables.empty();
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            final Disposable d = Disposables.empty();
 
-        Completable.create(new CompletableOnSubscribe() {
-            @Override
-            public void subscribe(CompletableEmitter e) throws Exception {
-                e.setDisposable(d);
+            Completable.create(new CompletableOnSubscribe() {
+                @Override
+                public void subscribe(CompletableEmitter e) throws Exception {
+                    e.setDisposable(d);
 
-                e.onError(new TestException());
-                e.onComplete();
-                e.onError(new TestException());
-            }
-        })
-        .test()
-        .assertFailure(TestException.class);
+                    e.onError(new TestException());
+                    e.onComplete();
+                    e.onError(new TestException("second"));
+                }
+            })
+            .test()
+            .assertFailure(TestException.class);
 
-        assertTrue(d.isDisposed());
+            assertTrue(d.isDisposed());
+
+            TestHelper.assertUndeliverable(errors, 0, TestException.class, "second");
+        } finally {
+            RxJavaPlugins.reset();
+        }
     }
 
     @Test
@@ -271,5 +294,38 @@ public class CompletableCreateTest {
                 throw new TestException();
             }
         });
+    }
+
+    @Test
+    public void tryOnError() {
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            final Boolean[] response = { null };
+            Completable.create(new CompletableOnSubscribe() {
+                @Override
+                public void subscribe(CompletableEmitter e) throws Exception {
+                    e.onComplete();
+                    response[0] = e.tryOnError(new TestException());
+                }
+            })
+            .test()
+            .assertResult();
+
+            assertFalse(response[0]);
+
+            assertTrue(errors.toString(), errors.isEmpty());
+        } finally {
+            RxJavaPlugins.reset();
+        }
+    }
+
+    @Test
+    public void emitterHasToString() {
+        Completable.create(new CompletableOnSubscribe() {
+            @Override
+            public void subscribe(CompletableEmitter emitter) throws Exception {
+                assertTrue(emitter.toString().contains(CompletableCreate.Emitter.class.getSimpleName()));
+            }
+        }).test().assertEmpty();
     }
 }

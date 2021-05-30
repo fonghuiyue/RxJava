@@ -22,6 +22,8 @@ import io.reactivex.Scheduler.Worker;
 import io.reactivex.exceptions.MissingBackpressureException;
 import io.reactivex.internal.fuseable.ConditionalSubscriber;
 import io.reactivex.internal.queue.SpscArrayQueue;
+import io.reactivex.internal.schedulers.SchedulerMultiWorkerSupport;
+import io.reactivex.internal.schedulers.SchedulerMultiWorkerSupport.WorkerCallback;
 import io.reactivex.internal.subscriptions.SubscriptionHelper;
 import io.reactivex.internal.util.BackpressureHelper;
 import io.reactivex.parallel.ParallelFlowable;
@@ -47,7 +49,7 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
     }
 
     @Override
-    public void subscribe(Subscriber<? super T>[] subscribers) {
+    public void subscribe(final Subscriber<? super T>[] subscribers) {
         if (!validate(subscribers)) {
             return;
         }
@@ -55,26 +57,50 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
         int n = subscribers.length;
 
         @SuppressWarnings("unchecked")
-        Subscriber<T>[] parents = new Subscriber[n];
+        final Subscriber<T>[] parents = new Subscriber[n];
 
-        int prefetch = this.prefetch;
-
-        for (int i = 0; i < n; i++) {
-            Subscriber<? super T> a = subscribers[i];
-
-            Worker w = scheduler.createWorker();
-            SpscArrayQueue<T> q = new SpscArrayQueue<T>(prefetch);
-
-            if (a instanceof ConditionalSubscriber) {
-                parents[i] = new RunOnConditionalSubscriber<T>((ConditionalSubscriber<? super T>)a, prefetch, q, w);
-            } else {
-                parents[i] = new RunOnSubscriber<T>(a, prefetch, q, w);
+        if (scheduler instanceof SchedulerMultiWorkerSupport) {
+            SchedulerMultiWorkerSupport multiworker = (SchedulerMultiWorkerSupport) scheduler;
+            multiworker.createWorkers(n, new MultiWorkerCallback(subscribers, parents));
+        } else {
+            for (int i = 0; i < n; i++) {
+                createSubscriber(i, subscribers, parents, scheduler.createWorker());
             }
         }
-
         source.subscribe(parents);
     }
 
+    void createSubscriber(int i, Subscriber<? super T>[] subscribers,
+            Subscriber<T>[] parents, Scheduler.Worker worker) {
+
+        Subscriber<? super T> a = subscribers[i];
+
+        SpscArrayQueue<T> q = new SpscArrayQueue<T>(prefetch);
+
+        if (a instanceof ConditionalSubscriber) {
+            parents[i] = new RunOnConditionalSubscriber<T>((ConditionalSubscriber<? super T>)a, prefetch, q, worker);
+        } else {
+            parents[i] = new RunOnSubscriber<T>(a, prefetch, q, worker);
+        }
+    }
+
+    final class MultiWorkerCallback implements WorkerCallback {
+
+        final Subscriber<? super T>[] subscribers;
+
+        final Subscriber<T>[] parents;
+
+        MultiWorkerCallback(Subscriber<? super T>[] subscribers,
+                Subscriber<T>[] parents) {
+            this.subscribers = subscribers;
+            this.parents = parents;
+        }
+
+        @Override
+        public void onWorker(int i, Worker w) {
+            createSubscriber(i, subscribers, parents, w);
+        }
+    }
 
     @Override
     public int parallelism() {
@@ -94,7 +120,7 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
 
         final Worker worker;
 
-        Subscription s;
+        Subscription upstream;
 
         volatile boolean done;
 
@@ -119,7 +145,7 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
                 return;
             }
             if (!queue.offer(t)) {
-                s.cancel();
+                upstream.cancel();
                 onError(new MissingBackpressureException("Queue is full?!"));
                 return;
             }
@@ -158,7 +184,7 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
         public final void cancel() {
             if (!cancelled) {
                 cancelled = true;
-                s.cancel();
+                upstream.cancel();
                 worker.dispose();
 
                 if (getAndIncrement() == 0) {
@@ -178,19 +204,19 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
 
         private static final long serialVersionUID = 1075119423897941642L;
 
-        final Subscriber<? super T> actual;
+        final Subscriber<? super T> downstream;
 
         RunOnSubscriber(Subscriber<? super T> actual, int prefetch, SpscArrayQueue<T> queue, Worker worker) {
             super(prefetch, queue, worker);
-            this.actual = actual;
+            this.downstream = actual;
         }
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (SubscriptionHelper.validate(this.s, s)) {
-                this.s = s;
+            if (SubscriptionHelper.validate(this.upstream, s)) {
+                this.upstream = s;
 
-                actual.onSubscribe(this);
+                downstream.onSubscribe(this);
 
                 s.request(prefetch);
             }
@@ -201,7 +227,7 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
             int missed = 1;
             int c = consumed;
             SpscArrayQueue<T> q = queue;
-            Subscriber<? super T> a = actual;
+            Subscriber<? super T> a = downstream;
             int lim = limit;
 
             for (;;) {
@@ -251,7 +277,7 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
                     int p = ++c;
                     if (p == lim) {
                         c = 0;
-                        s.request(p);
+                        upstream.request(p);
                     }
                 }
 
@@ -302,19 +328,19 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
 
         private static final long serialVersionUID = 1075119423897941642L;
 
-        final ConditionalSubscriber<? super T> actual;
+        final ConditionalSubscriber<? super T> downstream;
 
         RunOnConditionalSubscriber(ConditionalSubscriber<? super T> actual, int prefetch, SpscArrayQueue<T> queue, Worker worker) {
             super(prefetch, queue, worker);
-            this.actual = actual;
+            this.downstream = actual;
         }
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (SubscriptionHelper.validate(this.s, s)) {
-                this.s = s;
+            if (SubscriptionHelper.validate(this.upstream, s)) {
+                this.upstream = s;
 
-                actual.onSubscribe(this);
+                downstream.onSubscribe(this);
 
                 s.request(prefetch);
             }
@@ -325,7 +351,7 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
             int missed = 1;
             int c = consumed;
             SpscArrayQueue<T> q = queue;
-            ConditionalSubscriber<? super T> a = actual;
+            ConditionalSubscriber<? super T> a = downstream;
             int lim = limit;
 
             for (;;) {
@@ -375,7 +401,7 @@ public final class ParallelRunOn<T> extends ParallelFlowable<T> {
                     int p = ++c;
                     if (p == lim) {
                         c = 0;
-                        s.request(p);
+                        upstream.request(p);
                     }
                 }
 

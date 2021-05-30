@@ -52,7 +52,6 @@ public final class ParallelReduceFull<T> extends Flowable<T> {
 
     static final class ParallelReduceFullMainSubscriber<T> extends DeferredScalarSubscription<T> {
 
-
         private static final long serialVersionUID = -5370107872170712765L;
 
         final ParallelReduceFullInnerSubscriber<T>[] subscribers;
@@ -117,7 +116,7 @@ public final class ParallelReduceFull<T> extends Flowable<T> {
         void innerError(Throwable ex) {
             if (error.compareAndSet(null, ex)) {
                 cancel();
-                actual.onError(ex);
+                downstream.onError(ex);
             } else {
                 if (ex != error.get()) {
                     RxJavaPlugins.onError(ex);
@@ -153,7 +152,7 @@ public final class ParallelReduceFull<T> extends Flowable<T> {
                 if (sp != null) {
                     complete(sp.first);
                 } else {
-                    actual.onComplete();
+                    downstream.onComplete();
                 }
             }
         }
@@ -180,9 +179,7 @@ public final class ParallelReduceFull<T> extends Flowable<T> {
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (SubscriptionHelper.setOnce(this, s)) {
-                s.request(Long.MAX_VALUE);
-            }
+            SubscriptionHelper.setOnce(this, s, Long.MAX_VALUE);
         }
 
         @Override

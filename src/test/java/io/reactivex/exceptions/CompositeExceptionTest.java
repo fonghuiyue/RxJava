@@ -182,6 +182,7 @@ public class CompositeExceptionTest {
         composite.getCause();
         composite.printStackTrace();
     }
+
     @Test
     public void testNullElement() {
         CompositeException composite = new CompositeException(Collections.singletonList((Throwable) null));
@@ -348,6 +349,37 @@ public class CompositeExceptionTest {
         Throwable e = new BadException();
         assertSame(e, new CompositeException(e).getCause().getCause());
         assertSame(e, new CompositeException(new RuntimeException(e)).getCause().getCause().getCause());
+    }
+
+    @Test
+    public void rootCauseEval() {
+        final TestException ex0 = new TestException();
+        Throwable throwable = new Throwable() {
+
+            private static final long serialVersionUID = 3597694032723032281L;
+
+            @Override
+            public synchronized Throwable getCause() {
+                return ex0;
+            }
+        };
+        CompositeException ex = new CompositeException(throwable);
+        assertSame(ex0, ex.getRootCause(ex));
+    }
+
+    @Test
+    public void rootCauseSelf() {
+        Throwable throwable = new Throwable() {
+
+            private static final long serialVersionUID = -4398003222998914415L;
+
+            @Override
+            public synchronized Throwable getCause() {
+                return this;
+            }
+        };
+        CompositeException tmp = new CompositeException(new TestException());
+        assertSame(throwable, tmp.getRootCause(throwable));
     }
 }
 

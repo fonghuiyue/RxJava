@@ -48,7 +48,6 @@ public final class ObservableCreate<T> extends Observable<T> {
     extends AtomicReference<Disposable>
     implements ObservableEmitter<T>, Disposable {
 
-
         private static final long serialVersionUID = -3434801548987643227L;
 
         final Observer<? super T> observer;
@@ -70,6 +69,13 @@ public final class ObservableCreate<T> extends Observable<T> {
 
         @Override
         public void onError(Throwable t) {
+            if (!tryOnError(t)) {
+                RxJavaPlugins.onError(t);
+            }
+        }
+
+        @Override
+        public boolean tryOnError(Throwable t) {
             if (t == null) {
                 t = new NullPointerException("onError called with null. Null values are generally not allowed in 2.x operators and sources.");
             }
@@ -79,9 +85,9 @@ public final class ObservableCreate<T> extends Observable<T> {
                 } finally {
                     dispose();
                 }
-            } else {
-                RxJavaPlugins.onError(t);
+                return true;
             }
+            return false;
         }
 
         @Override
@@ -118,6 +124,11 @@ public final class ObservableCreate<T> extends Observable<T> {
         @Override
         public boolean isDisposed() {
             return DisposableHelper.isDisposed(get());
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s{%s}", getClass().getSimpleName(), super.toString());
         }
     }
 
@@ -174,9 +185,15 @@ public final class ObservableCreate<T> extends Observable<T> {
 
         @Override
         public void onError(Throwable t) {
-            if (emitter.isDisposed() || done) {
+            if (!tryOnError(t)) {
                 RxJavaPlugins.onError(t);
-                return;
+            }
+        }
+
+        @Override
+        public boolean tryOnError(Throwable t) {
+            if (emitter.isDisposed() || done) {
+                return false;
             }
             if (t == null) {
                 t = new NullPointerException("onError called with null. Null values are generally not allowed in 2.x operators and sources.");
@@ -184,9 +201,9 @@ public final class ObservableCreate<T> extends Observable<T> {
             if (error.addThrowable(t)) {
                 done = true;
                 drain();
-            } else {
-                RxJavaPlugins.onError(t);
+                return true;
             }
+            return false;
         }
 
         @Override
@@ -248,8 +265,8 @@ public final class ObservableCreate<T> extends Observable<T> {
         }
 
         @Override
-        public void setDisposable(Disposable s) {
-            emitter.setDisposable(s);
+        public void setDisposable(Disposable d) {
+            emitter.setDisposable(d);
         }
 
         @Override
@@ -265,6 +282,11 @@ public final class ObservableCreate<T> extends Observable<T> {
         @Override
         public ObservableEmitter<T> serialize() {
             return this;
+        }
+
+        @Override
+        public String toString() {
+            return emitter.toString();
         }
     }
 

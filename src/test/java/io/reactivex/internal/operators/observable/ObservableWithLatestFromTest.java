@@ -27,6 +27,7 @@ import io.reactivex.Observer;
 import io.reactivex.disposables.Disposables;
 import io.reactivex.exceptions.TestException;
 import io.reactivex.functions.*;
+import io.reactivex.internal.functions.Functions;
 import io.reactivex.internal.util.CrashingMappedIterable;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
@@ -88,9 +89,9 @@ public class ObservableWithLatestFromTest {
 
         Observable<Integer> result = source.withLatestFrom(other, COMBINER);
 
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        result.subscribe(ts);
+        result.subscribe(to);
 
         assertTrue(source.hasObservers());
         assertTrue(other.hasObservers());
@@ -99,9 +100,9 @@ public class ObservableWithLatestFromTest {
 
         source.onComplete();
 
-        ts.assertNoErrors();
-        ts.assertTerminated();
-        ts.assertNoValues();
+        to.assertNoErrors();
+        to.assertTerminated();
+        to.assertNoValues();
 
         assertFalse(source.hasObservers());
         assertFalse(other.hasObservers());
@@ -114,9 +115,9 @@ public class ObservableWithLatestFromTest {
 
         Observable<Integer> result = source.withLatestFrom(other, COMBINER);
 
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        result.subscribe(ts);
+        result.subscribe(to);
 
         assertTrue(source.hasObservers());
         assertTrue(other.hasObservers());
@@ -125,14 +126,13 @@ public class ObservableWithLatestFromTest {
 
         source.onComplete();
 
-        ts.assertNoErrors();
-        ts.assertTerminated();
-        ts.assertNoValues();
+        to.assertNoErrors();
+        to.assertTerminated();
+        to.assertNoValues();
 
         assertFalse(source.hasObservers());
         assertFalse(other.hasObservers());
     }
-
 
     @Test
     public void testUnsubscription() {
@@ -141,9 +141,9 @@ public class ObservableWithLatestFromTest {
 
         Observable<Integer> result = source.withLatestFrom(other, COMBINER);
 
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        result.subscribe(ts);
+        result.subscribe(to);
 
         assertTrue(source.hasObservers());
         assertTrue(other.hasObservers());
@@ -151,11 +151,11 @@ public class ObservableWithLatestFromTest {
         other.onNext(1);
         source.onNext(1);
 
-        ts.dispose();
+        to.dispose();
 
-        ts.assertValue((1 << 8) + 1);
-        ts.assertNoErrors();
-        ts.assertNotComplete();
+        to.assertValue((1 << 8) + 1);
+        to.assertNoErrors();
+        to.assertNotComplete();
 
         assertFalse(source.hasObservers());
         assertFalse(other.hasObservers());
@@ -168,9 +168,9 @@ public class ObservableWithLatestFromTest {
 
         Observable<Integer> result = source.withLatestFrom(other, COMBINER);
 
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        result.subscribe(ts);
+        result.subscribe(to);
 
         assertTrue(source.hasObservers());
         assertTrue(other.hasObservers());
@@ -180,14 +180,15 @@ public class ObservableWithLatestFromTest {
 
         source.onError(new TestException());
 
-        ts.assertTerminated();
-        ts.assertValue((1 << 8) + 1);
-        ts.assertError(TestException.class);
-        ts.assertNotComplete();
+        to.assertTerminated();
+        to.assertValue((1 << 8) + 1);
+        to.assertError(TestException.class);
+        to.assertNotComplete();
 
         assertFalse(source.hasObservers());
         assertFalse(other.hasObservers());
     }
+
     @Test
     public void testOtherThrows() {
         PublishSubject<Integer> source = PublishSubject.create();
@@ -195,9 +196,9 @@ public class ObservableWithLatestFromTest {
 
         Observable<Integer> result = source.withLatestFrom(other, COMBINER);
 
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        result.subscribe(ts);
+        result.subscribe(to);
 
         assertTrue(source.hasObservers());
         assertTrue(other.hasObservers());
@@ -207,10 +208,10 @@ public class ObservableWithLatestFromTest {
 
         other.onError(new TestException());
 
-        ts.assertTerminated();
-        ts.assertValue((1 << 8) + 1);
-        ts.assertNotComplete();
-        ts.assertError(TestException.class);
+        to.assertTerminated();
+        to.assertValue((1 << 8) + 1);
+        to.assertNotComplete();
+        to.assertError(TestException.class);
 
         assertFalse(source.hasObservers());
         assertFalse(other.hasObservers());
@@ -223,9 +224,9 @@ public class ObservableWithLatestFromTest {
 
         Observable<Integer> result = source.withLatestFrom(other, COMBINER_ERROR);
 
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        result.subscribe(ts);
+        result.subscribe(to);
 
         assertTrue(source.hasObservers());
         assertTrue(other.hasObservers());
@@ -233,10 +234,10 @@ public class ObservableWithLatestFromTest {
         other.onNext(1);
         source.onNext(1);
 
-        ts.assertTerminated();
-        ts.assertNotComplete();
-        ts.assertNoValues();
-        ts.assertError(TestException.class);
+        to.assertTerminated();
+        to.assertNotComplete();
+        to.assertNoValues();
+        to.assertError(TestException.class);
 
         assertFalse(source.hasObservers());
         assertFalse(other.hasObservers());
@@ -249,16 +250,15 @@ public class ObservableWithLatestFromTest {
 
         Observable<Integer> result = source.withLatestFrom(other, COMBINER);
 
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        result.subscribe(ts);
+        result.subscribe(to);
 
         source.onComplete();
 
         // 2.0.2 - not anymore
 //        assertTrue("Not cancelled!", ts.isCancelled());
     }
-
 
     static final Function<Object[], String> toArray = new Function<Object[], String>() {
         @Override
@@ -274,40 +274,40 @@ public class ObservableWithLatestFromTest {
         PublishSubject<String> ps3 = PublishSubject.create();
         PublishSubject<String> main = PublishSubject.create();
 
-        TestObserver<String> ts = new TestObserver<String>();
+        TestObserver<String> to = new TestObserver<String>();
 
         main.withLatestFrom(new Observable[] { ps1, ps2, ps3 }, toArray)
-        .subscribe(ts);
+        .subscribe(to);
 
         main.onNext("1");
-        ts.assertNoValues();
+        to.assertNoValues();
         ps1.onNext("a");
-        ts.assertNoValues();
+        to.assertNoValues();
         ps2.onNext("A");
-        ts.assertNoValues();
+        to.assertNoValues();
         ps3.onNext("=");
-        ts.assertNoValues();
+        to.assertNoValues();
 
         main.onNext("2");
-        ts.assertValues("[2, a, A, =]");
+        to.assertValues("[2, a, A, =]");
 
         ps2.onNext("B");
 
-        ts.assertValues("[2, a, A, =]");
+        to.assertValues("[2, a, A, =]");
 
         ps3.onComplete();
-        ts.assertValues("[2, a, A, =]");
+        to.assertValues("[2, a, A, =]");
 
         ps1.onNext("b");
 
         main.onNext("3");
 
-        ts.assertValues("[2, a, A, =]", "[3, b, B, =]");
+        to.assertValues("[2, a, A, =]", "[3, b, B, =]");
 
         main.onComplete();
-        ts.assertValues("[2, a, A, =]", "[3, b, B, =]");
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValues("[2, a, A, =]", "[3, b, B, =]");
+        to.assertNoErrors();
+        to.assertComplete();
 
         assertFalse("ps1 has subscribers?", ps1.hasObservers());
         assertFalse("ps2 has subscribers?", ps2.hasObservers());
@@ -321,40 +321,40 @@ public class ObservableWithLatestFromTest {
         PublishSubject<String> ps3 = PublishSubject.create();
         PublishSubject<String> main = PublishSubject.create();
 
-        TestObserver<String> ts = new TestObserver<String>();
+        TestObserver<String> to = new TestObserver<String>();
 
         main.withLatestFrom(Arrays.<Observable<?>>asList(ps1, ps2, ps3), toArray)
-        .subscribe(ts);
+        .subscribe(to);
 
         main.onNext("1");
-        ts.assertNoValues();
+        to.assertNoValues();
         ps1.onNext("a");
-        ts.assertNoValues();
+        to.assertNoValues();
         ps2.onNext("A");
-        ts.assertNoValues();
+        to.assertNoValues();
         ps3.onNext("=");
-        ts.assertNoValues();
+        to.assertNoValues();
 
         main.onNext("2");
-        ts.assertValues("[2, a, A, =]");
+        to.assertValues("[2, a, A, =]");
 
         ps2.onNext("B");
 
-        ts.assertValues("[2, a, A, =]");
+        to.assertValues("[2, a, A, =]");
 
         ps3.onComplete();
-        ts.assertValues("[2, a, A, =]");
+        to.assertValues("[2, a, A, =]");
 
         ps1.onNext("b");
 
         main.onNext("3");
 
-        ts.assertValues("[2, a, A, =]", "[3, b, B, =]");
+        to.assertValues("[2, a, A, =]", "[3, b, B, =]");
 
         main.onComplete();
-        ts.assertValues("[2, a, A, =]", "[3, b, B, =]");
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValues("[2, a, A, =]", "[3, b, B, =]");
+        to.assertNoErrors();
+        to.assertComplete();
 
         assertFalse("ps1 has subscribers?", ps1.hasObservers());
         assertFalse("ps2 has subscribers?", ps2.hasObservers());
@@ -375,20 +375,20 @@ public class ObservableWithLatestFromTest {
                     expected.add(String.valueOf(val));
                 }
 
-                TestObserver<String> ts = new TestObserver<String>();
+                TestObserver<String> to = new TestObserver<String>();
 
                 PublishSubject<String> main = PublishSubject.create();
 
-                main.withLatestFrom(sources, toArray).subscribe(ts);
+                main.withLatestFrom(sources, toArray).subscribe(to);
 
-                ts.assertNoValues();
+                to.assertNoValues();
 
                 main.onNext(val);
                 main.onComplete();
 
-                ts.assertValue(expected.toString());
-                ts.assertNoErrors();
-                ts.assertComplete();
+                to.assertValue(expected.toString());
+                to.assertNoErrors();
+                to.assertComplete();
             }
         }
     }
@@ -399,18 +399,18 @@ public class ObservableWithLatestFromTest {
 //        PublishSubject<String> ps1 = PublishSubject.create();
 //        PublishSubject<String> ps2 = PublishSubject.create();
 //
-//        TestObserver<String> ts = new TestObserver<String>();
+//        TestObserver<String> to = new TestObserver<String>();
 //
 //        Observable.range(1, 10).withLatestFrom(new Observable<?>[] { ps1, ps2 }, toArray)
-//        .subscribe(ts);
+//        .subscribe(to);
 //
-//        ts.assertNoValues();
+//        to.assertNoValues();
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertNoValues();
-//        ts.assertNoErrors();
-//        ts.assertComplete();
+//        to.assertNoValues();
+//        to.assertNoErrors();
+//        to.assertComplete();
 //
 //        assertFalse("ps1 has subscribers?", ps1.hasSubscribers());
 //        assertFalse("ps2 has subscribers?", ps2.hasSubscribers());
@@ -422,29 +422,29 @@ public class ObservableWithLatestFromTest {
 //        PublishSubject<String> ps1 = PublishSubject.create();
 //        PublishSubject<String> ps2 = PublishSubject.create();
 //
-//        TestObserver<String> ts = new TestObserver<String>();
+//        TestObserver<String> to = new TestObserver<String>();
 //
 //        Observable.range(1, 3).withLatestFrom(new Observable<?>[] { ps1, ps2 }, toArray)
 //        .subscribe(ts);
 //
-//        ts.assertNoValues();
+//        to.assertNoValues();
 //
 //        ps1.onNext("1");
 //        ps2.onNext("1");
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertValue("[1, 1, 1]");
+//        to.assertValue("[1, 1, 1]");
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertValues("[1, 1, 1]", "[2, 1, 1]");
+//        to.assertValues("[1, 1, 1]", "[2, 1, 1]");
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertValues("[1, 1, 1]", "[2, 1, 1]", "[3, 1, 1]");
-//        ts.assertNoErrors();
-//        ts.assertComplete();
+//        to.assertValues("[1, 1, 1]", "[2, 1, 1]", "[3, 1, 1]");
+//        to.assertNoErrors();
+//        to.assertComplete();
 //
 //        assertFalse("ps1 has subscribers?", ps1.hasSubscribers());
 //        assertFalse("ps2 has subscribers?", ps2.hasSubscribers());
@@ -452,48 +452,48 @@ public class ObservableWithLatestFromTest {
 
     @Test
     public void withEmpty() {
-        TestObserver<String> ts = new TestObserver<String>();
+        TestObserver<String> to = new TestObserver<String>();
 
         Observable.range(1, 3).withLatestFrom(
                 new Observable<?>[] { Observable.just(1), Observable.empty() }, toArray)
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertNoValues();
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertNoValues();
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @Test
     public void withError() {
-        TestObserver<String> ts = new TestObserver<String>();
+        TestObserver<String> to = new TestObserver<String>();
 
         Observable.range(1, 3).withLatestFrom(
                 new Observable<?>[] { Observable.just(1), Observable.error(new TestException()) }, toArray)
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertNoValues();
-        ts.assertError(TestException.class);
-        ts.assertNotComplete();
+        to.assertNoValues();
+        to.assertError(TestException.class);
+        to.assertNotComplete();
     }
 
     @Test
     public void withMainError() {
-        TestObserver<String> ts = new TestObserver<String>();
+        TestObserver<String> to = new TestObserver<String>();
 
         Observable.error(new TestException()).withLatestFrom(
                 new Observable<?>[] { Observable.just(1), Observable.just(1) }, toArray)
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertNoValues();
-        ts.assertError(TestException.class);
-        ts.assertNotComplete();
+        to.assertNoValues();
+        to.assertError(TestException.class);
+        to.assertNotComplete();
     }
 
     @Test
     public void with2Others() {
         Observable<Integer> just = Observable.just(1);
 
-        TestObserver<List<Integer>> ts = new TestObserver<List<Integer>>();
+        TestObserver<List<Integer>> to = new TestObserver<List<Integer>>();
 
         just.withLatestFrom(just, just, new Function3<Integer, Integer, Integer, List<Integer>>() {
             @Override
@@ -501,18 +501,18 @@ public class ObservableWithLatestFromTest {
                 return Arrays.asList(a, b, c);
             }
         })
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertValue(Arrays.asList(1, 1, 1));
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValue(Arrays.asList(1, 1, 1));
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @Test
     public void with3Others() {
         Observable<Integer> just = Observable.just(1);
 
-        TestObserver<List<Integer>> ts = new TestObserver<List<Integer>>();
+        TestObserver<List<Integer>> to = new TestObserver<List<Integer>>();
 
         just.withLatestFrom(just, just, just, new Function4<Integer, Integer, Integer, Integer, List<Integer>>() {
             @Override
@@ -520,18 +520,18 @@ public class ObservableWithLatestFromTest {
                 return Arrays.asList(a, b, c, d);
             }
         })
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertValue(Arrays.asList(1, 1, 1, 1));
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValue(Arrays.asList(1, 1, 1, 1));
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @Test
     public void with4Others() {
         Observable<Integer> just = Observable.just(1);
 
-        TestObserver<List<Integer>> ts = new TestObserver<List<Integer>>();
+        TestObserver<List<Integer>> to = new TestObserver<List<Integer>>();
 
         just.withLatestFrom(just, just, just, just, new Function5<Integer, Integer, Integer, Integer, Integer, List<Integer>>() {
             @Override
@@ -539,11 +539,11 @@ public class ObservableWithLatestFromTest {
                 return Arrays.asList(a, b, c, d, e);
             }
         })
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertValue(Arrays.asList(1, 1, 1, 1, 1));
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValue(Arrays.asList(1, 1, 1, 1, 1));
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @Test
@@ -646,5 +646,13 @@ public class ObservableWithLatestFromTest {
         })
         .test()
         .assertFailure(NullPointerException.class);
+    }
+
+    @Test
+    public void zeroOtherCombinerReturnsNull() {
+        Observable.just(1)
+        .withLatestFrom(new Observable[0], Functions.justFunction(null))
+        .test()
+        .assertFailureAndMessage(NullPointerException.class, "The combiner returned a null value");
     }
 }

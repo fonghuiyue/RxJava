@@ -15,69 +15,90 @@ package io.reactivex.internal.operators.observable;
 
 import io.reactivex.*;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.exceptions.Exceptions;
+import io.reactivex.functions.Function;
 import io.reactivex.internal.disposables.DisposableHelper;
+import io.reactivex.internal.functions.ObjectHelper;
 import io.reactivex.plugins.RxJavaPlugins;
 
-public final class ObservableDematerialize<T> extends AbstractObservableWithUpstream<Notification<T>, T> {
+public final class ObservableDematerialize<T, R> extends AbstractObservableWithUpstream<T, R> {
 
-    public ObservableDematerialize(ObservableSource<Notification<T>> source) {
+    final Function<? super T, ? extends Notification<R>> selector;
+
+    public ObservableDematerialize(ObservableSource<T> source, Function<? super T, ? extends Notification<R>> selector) {
         super(source);
+        this.selector = selector;
     }
 
     @Override
-    public void subscribeActual(Observer<? super T> t) {
-        source.subscribe(new DematerializeObserver<T>(t));
+    public void subscribeActual(Observer<? super R> observer) {
+        source.subscribe(new DematerializeObserver<T, R>(observer, selector));
     }
 
-    static final class DematerializeObserver<T> implements Observer<Notification<T>>, Disposable {
-        final Observer<? super T> actual;
+    static final class DematerializeObserver<T, R> implements Observer<T>, Disposable {
+        final Observer<? super R> downstream;
+
+        final Function<? super T, ? extends Notification<R>> selector;
 
         boolean done;
 
-        Disposable s;
+        Disposable upstream;
 
-        DematerializeObserver(Observer<? super T> actual) {
-            this.actual = actual;
+        DematerializeObserver(Observer<? super R> downstream, Function<? super T, ? extends Notification<R>> selector) {
+            this.downstream = downstream;
+            this.selector = selector;
         }
 
         @Override
-        public void onSubscribe(Disposable s) {
-            if (DisposableHelper.validate(this.s, s)) {
-                this.s = s;
+        public void onSubscribe(Disposable d) {
+            if (DisposableHelper.validate(this.upstream, d)) {
+                this.upstream = d;
 
-                actual.onSubscribe(this);
+                downstream.onSubscribe(this);
             }
         }
 
-
         @Override
         public void dispose() {
-            s.dispose();
+            upstream.dispose();
         }
 
         @Override
         public boolean isDisposed() {
-            return s.isDisposed();
+            return upstream.isDisposed();
         }
 
-
         @Override
-        public void onNext(Notification<T> t) {
+        public void onNext(T item) {
             if (done) {
-                if (t.isOnError()) {
-                    RxJavaPlugins.onError(t.getError());
+                if (item instanceof Notification) {
+                    Notification<?> notification = (Notification<?>)item;
+                    if (notification.isOnError()) {
+                        RxJavaPlugins.onError(notification.getError());
+                    }
                 }
                 return;
             }
-            if (t.isOnError()) {
-                s.dispose();
-                onError(t.getError());
+
+            Notification<R> notification;
+
+            try {
+                notification = ObjectHelper.requireNonNull(selector.apply(item), "The selector returned a null Notification");
+            } catch (Throwable ex) {
+                Exceptions.throwIfFatal(ex);
+                upstream.dispose();
+                onError(ex);
+                return;
             }
-            else if (t.isOnComplete()) {
-                s.dispose();
+            if (notification.isOnError()) {
+                upstream.dispose();
+                onError(notification.getError());
+            }
+            else if (notification.isOnComplete()) {
+                upstream.dispose();
                 onComplete();
             } else {
-                actual.onNext(t.getValue());
+                downstream.onNext(notification.getValue());
             }
         }
 
@@ -89,8 +110,9 @@ public final class ObservableDematerialize<T> extends AbstractObservableWithUpst
             }
             done = true;
 
-            actual.onError(t);
+            downstream.onError(t);
         }
+
         @Override
         public void onComplete() {
             if (done) {
@@ -98,7 +120,7 @@ public final class ObservableDematerialize<T> extends AbstractObservableWithUpst
             }
             done = true;
 
-            actual.onComplete();
+            downstream.onComplete();
         }
     }
 }

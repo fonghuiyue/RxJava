@@ -13,12 +13,13 @@
 
 package io.reactivex.subjects;
 
-import io.reactivex.annotations.Experimental;
 import io.reactivex.annotations.Nullable;
+import io.reactivex.annotations.NonNull;
 import io.reactivex.plugins.RxJavaPlugins;
+
 import java.util.concurrent.atomic.*;
 
-import io.reactivex.Observer;
+import io.reactivex.*;
 import io.reactivex.annotations.CheckReturnValue;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.internal.disposables.EmptyDisposable;
@@ -28,19 +29,115 @@ import io.reactivex.internal.observers.BasicIntQueueDisposable;
 import io.reactivex.internal.queue.SpscLinkedArrayQueue;
 
 /**
- * Subject that allows only a single Subscriber to subscribe to it during its lifetime.
- *
- * <p>This subject buffers notifications and replays them to the Subscriber as requested.
- *
- * <p>This subject holds an unbounded internal buffer.
- *
- * <p>If more than one Subscriber attempts to subscribe to this Subject, they
- * will receive an IllegalStateException if this Subject hasn't terminated yet,
- * or the Subscribers receive the terminal event (error or completion) if this
- * Subject has terminated.
+ * A Subject that queues up events until a single {@link Observer} subscribes to it, replays
+ * those events to it until the {@code Observer} catches up and then switches to relaying events live to
+ * this single {@code Observer} until this {@code UnicastSubject} terminates or the {@code Observer} unsubscribes.
  * <p>
  * <img width="640" height="370" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/UnicastSubject.png" alt="">
+ * <p>
+ * Note that {@code UnicastSubject} holds an unbounded internal buffer.
+ * <p>
+ * This subject does not have a public constructor by design; a new empty instance of this
+ * {@code UnicastSubject} can be created via the following {@code create} methods that
+ * allow specifying the retention policy for items:
+ * <ul>
+ * <li>{@link #create()} - creates an empty, unbounded {@code UnicastSubject} that
+ *     caches all items and the terminal event it receives.</li>
+ * <li>{@link #create(int)} - creates an empty, unbounded {@code UnicastSubject}
+ *     with a hint about how many <b>total</b> items one expects to retain.</li>
+ * <li>{@link #create(boolean)} - creates an empty, unbounded {@code UnicastSubject} that
+ *     optionally delays an error it receives and replays it after the regular items have been emitted.</li>
+ * <li>{@link #create(int, Runnable)} - creates an empty, unbounded {@code UnicastSubject}
+ *     with a hint about how many <b>total</b> items one expects to retain and a callback that will be
+ *     called exactly once when the {@code UnicastSubject} gets terminated or the single {@code Observer} unsubscribes.</li>
+ * <li>{@link #create(int, Runnable, boolean)} - creates an empty, unbounded {@code UnicastSubject}
+ *     with a hint about how many <b>total</b> items one expects to retain and a callback that will be
+ *     called exactly once when the {@code UnicastSubject} gets terminated or the single {@code Observer} unsubscribes
+ *     and optionally delays an error it receives and replays it after the regular items have been emitted.</li>
+ * </ul>
+ * <p>
+ * If more than one {@code Observer} attempts to subscribe to this {@code UnicastSubject}, they
+ * will receive an {@code IllegalStateException} indicating the single-use-only nature of this {@code UnicastSubject},
+ * even if the {@code UnicastSubject} already terminated with an error.
+ * <p>
+ * Since a {@code Subject} is conceptionally derived from the {@code Processor} type in the Reactive Streams specification,
+ * {@code null}s are not allowed (<a href="https://github.com/reactive-streams/reactive-streams-jvm#2.13">Rule 2.13</a>) as
+ * parameters to {@link #onNext(Object)} and {@link #onError(Throwable)}. Such calls will result in a
+ * {@link NullPointerException} being thrown and the subject's state is not changed.
+ * <p>
+ * Since a {@code UnicastSubject} is an {@link io.reactivex.Observable}, it does not support backpressure.
+ * <p>
+ * When this {@code UnicastSubject} is terminated via {@link #onError(Throwable)} the current or late single {@code Observer}
+ * may receive the {@code Throwable} before any available items could be emitted. To make sure an onError event is delivered
+ * to the {@code Observer} after the normal items, create a {@code UnicastSubject} with the {@link #create(boolean)} or
+ * {@link #create(int, Runnable, boolean)} factory methods.
+ * <p>
+ * Even though {@code UnicastSubject} implements the {@code Observer} interface, calling
+ * {@code onSubscribe} is not required (<a href="https://github.com/reactive-streams/reactive-streams-jvm#2.12">Rule 2.12</a>)
+ * if the subject is used as a standalone source. However, calling {@code onSubscribe}
+ * after the {@code UnicastSubject} reached its terminal state will result in the
+ * given {@code Disposable} being disposed immediately.
+ * <p>
+ * Calling {@link #onNext(Object)}, {@link #onError(Throwable)} and {@link #onComplete()}
+ * is required to be serialized (called from the same thread or called non-overlappingly from different threads
+ * through external means of serialization). The {@link #toSerialized()} method available to all {@code Subject}s
+ * provides such serialization and also protects against reentrance (i.e., when a downstream {@code Observer}
+ * consuming this subject also wants to call {@link #onNext(Object)} on this subject recursively).
+ * <p>
+ * This {@code UnicastSubject} supports the standard state-peeking methods {@link #hasComplete()}, {@link #hasThrowable()},
+ * {@link #getThrowable()} and {@link #hasObservers()}.
+ * <dl>
+ *  <dt><b>Scheduler:</b></dt>
+ *  <dd>{@code UnicastSubject} does not operate by default on a particular {@link io.reactivex.Scheduler} and
+ *  the single {@code Observer} gets notified on the thread the respective {@code onXXX} methods were invoked.</dd>
+ *  <dt><b>Error handling:</b></dt>
+ *  <dd>When the {@link #onError(Throwable)} is called, the {@code UnicastSubject} enters into a terminal state
+ *  and emits the same {@code Throwable} instance to the current single {@code Observer}. During this emission,
+ *  if the single {@code Observer}s disposes its respective {@code Disposable}, the
+ *  {@code Throwable} is delivered to the global error handler via
+ *  {@link io.reactivex.plugins.RxJavaPlugins#onError(Throwable)}.
+ *  If there were no {@code Observer}s subscribed to this {@code UnicastSubject} when the {@code onError()}
+ *  was called, the global error handler is not invoked.
+ *  </dd>
+ * </dl>
+ * <p>
+ * Example usage:
+ * <pre><code>
+ * UnicastSubject&lt;Integer&gt; subject = UnicastSubject.create();
  *
+ * TestObserver&lt;Integer&gt; to1 = subject.test();
+ *
+ * // fresh UnicastSubjects are empty
+ * to1.assertEmpty();
+ *
+ * TestObserver&lt;Integer&gt; to2 = subject.test();
+ *
+ * // A UnicastSubject only allows one Observer during its lifetime
+ * to2.assertFailure(IllegalStateException.class);
+ *
+ * subject.onNext(1);
+ * to1.assertValue(1);
+ *
+ * subject.onNext(2);
+ * to1.assertValues(1, 2);
+ *
+ * subject.onComplete();
+ * to1.assertResult(1, 2);
+ *
+ * // ----------------------------------------------------
+ *
+ * UnicastSubject&lt;Integer&gt; subject2 = UnicastSubject.create();
+ *
+ * // a UnicastSubject caches events until its single Observer subscribes
+ * subject2.onNext(1);
+ * subject2.onNext(2);
+ * subject2.onComplete();
+ *
+ * TestObserver&lt;Integer&gt; to3 = subject2.test();
+ *
+ * // the cached events are emitted in order
+ * to3.assertResult(1, 2);
+ * </code></pre>
  * @param <T> the value type received and emitted by this Subject subclass
  * @since 2.0
  */
@@ -49,7 +146,7 @@ public final class UnicastSubject<T> extends Subject<T> {
     final SpscLinkedArrayQueue<T> queue;
 
     /** The single Observer. */
-    final AtomicReference<Observer<? super T>> actual;
+    final AtomicReference<Observer<? super T>> downstream;
 
     /** The optional callback when the Subject gets cancelled or terminates. */
     final AtomicReference<Runnable> onTerminate;
@@ -82,6 +179,7 @@ public final class UnicastSubject<T> extends Subject<T> {
      * @return an UnicastSubject instance
      */
     @CheckReturnValue
+    @NonNull
     public static <T> UnicastSubject<T> create() {
         return new UnicastSubject<T>(bufferSize(), true);
     }
@@ -93,6 +191,7 @@ public final class UnicastSubject<T> extends Subject<T> {
      * @return an UnicastSubject instance
      */
     @CheckReturnValue
+    @NonNull
     public static <T> UnicastSubject<T> create(int capacityHint) {
         return new UnicastSubject<T>(capacityHint, true);
     }
@@ -110,6 +209,7 @@ public final class UnicastSubject<T> extends Subject<T> {
      * @return an UnicastSubject instance
      */
     @CheckReturnValue
+    @NonNull
     public static <T> UnicastSubject<T> create(int capacityHint, Runnable onTerminate) {
         return new UnicastSubject<T>(capacityHint, onTerminate, true);
     }
@@ -120,16 +220,16 @@ public final class UnicastSubject<T> extends Subject<T> {
      *
      * <p>The callback, if not null, is called exactly once and
      * non-overlapped with any active replay.
-     *
+     * <p>History: 2.0.8 - experimental
      * @param <T> the value type
      * @param capacityHint the hint to size the internal unbounded buffer
      * @param onTerminate the callback to run when the Subject is terminated or cancelled, null not allowed
      * @param delayError deliver pending onNext events before onError
      * @return an UnicastSubject instance
-     * @since 2.0.8 - experimental
+     * @since 2.2
      */
     @CheckReturnValue
-    @Experimental
+    @NonNull
     public static <T> UnicastSubject<T> create(int capacityHint, Runnable onTerminate, boolean delayError) {
         return new UnicastSubject<T>(capacityHint, onTerminate, delayError);
     }
@@ -139,30 +239,30 @@ public final class UnicastSubject<T> extends Subject<T> {
      *
      * <p>The callback, if not null, is called exactly once and
      * non-overlapped with any active replay.
-     *
+     * <p>History: 2.0.8 - experimental
      * @param <T> the value type
      * @param delayError deliver pending onNext events before onError
      * @return an UnicastSubject instance
-     * @since 2.0.8 - experimental
+     * @since 2.2
      */
     @CheckReturnValue
-    @Experimental
+    @NonNull
     public static <T> UnicastSubject<T> create(boolean delayError) {
         return new UnicastSubject<T>(bufferSize(), delayError);
     }
 
-
     /**
      * Creates an UnicastSubject with the given capacity hint and delay error flag.
+     * <p>History: 2.0.8 - experimental
      * @param capacityHint the capacity hint for the internal, unbounded queue
      * @param delayError deliver pending onNext events before onError
-     * @since 2.0.8 - experimental
+     * @since 2.2
      */
     UnicastSubject(int capacityHint, boolean delayError) {
         this.queue = new SpscLinkedArrayQueue<T>(ObjectHelper.verifyPositive(capacityHint, "capacityHint"));
         this.onTerminate = new AtomicReference<Runnable>();
         this.delayError = delayError;
-        this.actual = new AtomicReference<Observer<? super T>>();
+        this.downstream = new AtomicReference<Observer<? super T>>();
         this.once = new AtomicBoolean();
         this.wip = new UnicastQueueDisposable();
     }
@@ -182,16 +282,17 @@ public final class UnicastSubject<T> extends Subject<T> {
     /**
      * Creates an UnicastSubject with the given capacity hint, delay error flag and callback
      * for when the Subject is terminated normally or its single Subscriber cancels.
+     * <p>History: 2.0.8 - experimental
      * @param capacityHint the capacity hint for the internal, unbounded queue
      * @param onTerminate the callback to run when the Subject is terminated or cancelled, null not allowed
      * @param delayError deliver pending onNext events before onError
-     * @since 2.0.8 - experimental
+     * @since 2.2
      */
     UnicastSubject(int capacityHint, Runnable onTerminate, boolean delayError) {
         this.queue = new SpscLinkedArrayQueue<T>(ObjectHelper.verifyPositive(capacityHint, "capacityHint"));
         this.onTerminate = new AtomicReference<Runnable>(ObjectHelper.requireNonNull(onTerminate, "onTerminate"));
         this.delayError = delayError;
-        this.actual = new AtomicReference<Observer<? super T>>();
+        this.downstream = new AtomicReference<Observer<? super T>>();
         this.once = new AtomicBoolean();
         this.wip = new UnicastQueueDisposable();
     }
@@ -200,9 +301,9 @@ public final class UnicastSubject<T> extends Subject<T> {
     protected void subscribeActual(Observer<? super T> observer) {
         if (!once.get() && once.compareAndSet(false, true)) {
             observer.onSubscribe(wip);
-            actual.lazySet(observer); // full barrier in drain
+            downstream.lazySet(observer); // full barrier in drain
             if (disposed) {
-                actual.lazySet(null);
+                downstream.lazySet(null);
                 return;
             }
             drain();
@@ -219,19 +320,16 @@ public final class UnicastSubject<T> extends Subject<T> {
     }
 
     @Override
-    public void onSubscribe(Disposable s) {
+    public void onSubscribe(Disposable d) {
         if (done || disposed) {
-            s.dispose();
+            d.dispose();
         }
     }
 
     @Override
     public void onNext(T t) {
+        ObjectHelper.requireNonNull(t, "onNext called with null. Null values are generally not allowed in 2.x operators and sources.");
         if (done || disposed) {
-            return;
-        }
-        if (t == null) {
-            onError(new NullPointerException("onNext called with null. Null values are generally not allowed in 2.x operators and sources."));
             return;
         }
         queue.offer(t);
@@ -240,12 +338,10 @@ public final class UnicastSubject<T> extends Subject<T> {
 
     @Override
     public void onError(Throwable t) {
+        ObjectHelper.requireNonNull(t, "onError called with null. Null values are generally not allowed in 2.x operators and sources.");
         if (done || disposed) {
             RxJavaPlugins.onError(t);
             return;
-        }
-        if (t == null) {
-            t = new NullPointerException("onError called with null. Null values are generally not allowed in 2.x operators and sources.");
         }
         error = t;
         done = true;
@@ -276,7 +372,7 @@ public final class UnicastSubject<T> extends Subject<T> {
             for (;;) {
 
                 if (disposed) {
-                    actual.lazySet(null);
+                    downstream.lazySet(null);
                     q.clear();
                     return;
                 }
@@ -323,8 +419,7 @@ public final class UnicastSubject<T> extends Subject<T> {
         for (;;) {
 
             if (disposed) {
-                actual.lazySet(null);
-                q.clear();
+                downstream.lazySet(null);
                 return;
             }
             boolean d = done;
@@ -350,7 +445,7 @@ public final class UnicastSubject<T> extends Subject<T> {
     }
 
     void errorOrComplete(Observer<? super T> a) {
-        actual.lazySet(null);
+        downstream.lazySet(null);
         Throwable ex = error;
         if (ex != null) {
             a.onError(ex);
@@ -362,7 +457,7 @@ public final class UnicastSubject<T> extends Subject<T> {
     boolean failedFast(final SimpleQueue<T> q, Observer<? super T> a) {
         Throwable ex = error;
         if (ex != null) {
-            actual.lazySet(null);
+            downstream.lazySet(null);
             q.clear();
             a.onError(ex);
             return true;
@@ -376,7 +471,7 @@ public final class UnicastSubject<T> extends Subject<T> {
             return;
         }
 
-        Observer<? super T> a = actual.get();
+        Observer<? super T> a = downstream.get();
         int missed = 1;
 
         for (;;) {
@@ -395,16 +490,17 @@ public final class UnicastSubject<T> extends Subject<T> {
                 break;
             }
 
-            a = actual.get();
+            a = downstream.get();
         }
     }
 
     @Override
     public boolean hasObservers() {
-        return actual.get() != null;
+        return downstream.get() != null;
     }
 
     @Override
+    @Nullable
     public Throwable getThrowable() {
         if (done) {
             return error;
@@ -423,7 +519,6 @@ public final class UnicastSubject<T> extends Subject<T> {
     }
 
     final class UnicastQueueDisposable extends BasicIntQueueDisposable<T> {
-
 
         private static final long serialVersionUID = 7926949470189395511L;
 
@@ -459,10 +554,12 @@ public final class UnicastSubject<T> extends Subject<T> {
 
                 doTerminate();
 
-                actual.lazySet(null);
+                downstream.lazySet(null);
                 if (wip.getAndIncrement() == 0) {
-                    actual.lazySet(null);
-                    queue.clear();
+                    downstream.lazySet(null);
+                    if (!enableOperatorFusion) {
+                        queue.clear();
+                    }
                 }
             }
         }

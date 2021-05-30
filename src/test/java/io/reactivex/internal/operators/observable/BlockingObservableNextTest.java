@@ -28,7 +28,6 @@ import io.reactivex.disposables.*;
 import io.reactivex.exceptions.TestException;
 import io.reactivex.internal.operators.observable.BlockingObservableNext.NextObserver;
 import io.reactivex.plugins.RxJavaPlugins;
-import io.reactivex.processors.BehaviorProcessor;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subjects.*;
 
@@ -323,7 +322,7 @@ public class BlockingObservableNextTest {
             BlockingObservableNext.NextIterator<Long> it = (BlockingObservableNext.NextIterator<Long>)iter.iterator();
 
             for (long i = 0; i < 10; i++) {
-                Assert.assertEquals(true, it.hasNext());
+                Assert.assertTrue(it.hasNext());
                 Assert.assertEquals(j + "th iteration next", Long.valueOf(i), it.next());
             }
             terminal.onNext(1);
@@ -332,9 +331,9 @@ public class BlockingObservableNextTest {
 
     @Test
     public void testSynchronousNext() {
-        assertEquals(1, BehaviorProcessor.createDefault(1).take(1).blockingSingle().intValue());
-        assertEquals(2, BehaviorProcessor.createDefault(2).blockingIterable().iterator().next().intValue());
-        assertEquals(3, BehaviorProcessor.createDefault(3).blockingNext().iterator().next().intValue());
+        assertEquals(1, BehaviorSubject.createDefault(1).take(1).blockingSingle().intValue());
+        assertEquals(2, BehaviorSubject.createDefault(2).blockingIterable().iterator().next().intValue());
+        assertEquals(3, BehaviorSubject.createDefault(3).blockingNext().iterator().next().intValue());
     }
 
     @Test

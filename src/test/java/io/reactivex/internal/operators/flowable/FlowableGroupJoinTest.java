@@ -15,7 +15,7 @@
  */
 package io.reactivex.internal.operators.flowable;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 import java.util.*;
@@ -28,14 +28,14 @@ import io.reactivex.*;
 import io.reactivex.exceptions.*;
 import io.reactivex.functions.*;
 import io.reactivex.internal.functions.Functions;
+import io.reactivex.internal.operators.flowable.FlowableGroupJoin.*;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.processors.PublishProcessor;
-import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subscribers.TestSubscriber;
 
 public class FlowableGroupJoinTest {
 
-    Subscriber<Object> observer = TestHelper.mockSubscriber();
+    Subscriber<Object> subscriber = TestHelper.mockSubscriber();
 
     BiFunction<Integer, Integer, Integer> add = new BiFunction<Integer, Integer, Integer>() {
         @Override
@@ -44,20 +44,20 @@ public class FlowableGroupJoinTest {
         }
     };
 
-    <T> Function<Integer, Flowable<T>> just(final Flowable<T> observable) {
+    <T> Function<Integer, Flowable<T>> just(final Flowable<T> flowable) {
         return new Function<Integer, Flowable<T>>() {
             @Override
             public Flowable<T> apply(Integer t1) {
-                return observable;
+                return flowable;
             }
         };
     }
 
-    <T, R> Function<T, Flowable<R>> just2(final Flowable<R> observable) {
+    <T, R> Function<T, Flowable<R>> just2(final Flowable<R> flowable) {
         return new Function<T, Flowable<R>>() {
             @Override
             public Flowable<R> apply(T t1) {
-                return observable;
+                return flowable;
             }
         };
     }
@@ -89,7 +89,7 @@ public class FlowableGroupJoinTest {
                 just(Flowable.never()),
                 just(Flowable.never()), add2));
 
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
         source1.onNext(2);
@@ -102,18 +102,18 @@ public class FlowableGroupJoinTest {
         source1.onComplete();
         source2.onComplete();
 
-        verify(observer, times(1)).onNext(17);
-        verify(observer, times(1)).onNext(18);
-        verify(observer, times(1)).onNext(20);
-        verify(observer, times(1)).onNext(33);
-        verify(observer, times(1)).onNext(34);
-        verify(observer, times(1)).onNext(36);
-        verify(observer, times(1)).onNext(65);
-        verify(observer, times(1)).onNext(66);
-        verify(observer, times(1)).onNext(68);
+        verify(subscriber, times(1)).onNext(17);
+        verify(subscriber, times(1)).onNext(18);
+        verify(subscriber, times(1)).onNext(20);
+        verify(subscriber, times(1)).onNext(33);
+        verify(subscriber, times(1)).onNext(34);
+        verify(subscriber, times(1)).onNext(36);
+        verify(subscriber, times(1)).onNext(65);
+        verify(subscriber, times(1)).onNext(66);
+        verify(subscriber, times(1)).onNext(68);
 
-        verify(observer, times(1)).onComplete(); //Never emitted?
-        verify(observer, never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete(); //Never emitted?
+        verify(subscriber, never()).onError(any(Throwable.class));
     }
 
     class Person {
@@ -183,19 +183,19 @@ public class FlowableGroupJoinTest {
                         }).subscribe(new Consumer<PersonFruit>() {
                             @Override
                             public void accept(PersonFruit t1) {
-                                observer.onNext(Arrays.asList(ppf.person.name, t1.fruit));
+                                subscriber.onNext(Arrays.asList(ppf.person.name, t1.fruit));
                             }
                         });
                     }
 
                     @Override
                     public void onError(Throwable e) {
-                        observer.onError(e);
+                        subscriber.onError(e);
                     }
 
                     @Override
                     public void onComplete() {
-                        observer.onComplete();
+                        subscriber.onComplete();
                     }
 
                     @Override
@@ -206,12 +206,12 @@ public class FlowableGroupJoinTest {
                 }
                 );
 
-        verify(observer, times(1)).onNext(Arrays.asList("Joe", "Strawberry"));
-        verify(observer, times(1)).onNext(Arrays.asList("Joe", "Apple"));
-        verify(observer, times(1)).onNext(Arrays.asList("Charlie", "Peach"));
+        verify(subscriber, times(1)).onNext(Arrays.asList("Joe", "Strawberry"));
+        verify(subscriber, times(1)).onNext(Arrays.asList("Joe", "Apple"));
+        verify(subscriber, times(1)).onNext(Arrays.asList("Charlie", "Peach"));
 
-        verify(observer, times(1)).onComplete();
-        verify(observer, never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
+        verify(subscriber, never()).onError(any(Throwable.class));
     }
 
     @Test
@@ -223,14 +223,14 @@ public class FlowableGroupJoinTest {
                 just(Flowable.never()),
                 just(Flowable.never()), add2);
 
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source2.onNext(1);
         source1.onError(new RuntimeException("Forced failure"));
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -242,14 +242,14 @@ public class FlowableGroupJoinTest {
                 just(Flowable.never()),
                 just(Flowable.never()), add2);
 
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
         source2.onError(new RuntimeException("Forced failure"));
 
-        verify(observer, times(1)).onNext(any(Flowable.class));
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
+        verify(subscriber, times(1)).onNext(any(Flowable.class));
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
     }
 
     @Test
@@ -262,13 +262,13 @@ public class FlowableGroupJoinTest {
         Flowable<Flowable<Integer>> m = source1.groupJoin(source2,
                 just(duration1),
                 just(Flowable.never()), add2);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -281,13 +281,13 @@ public class FlowableGroupJoinTest {
         Flowable<Flowable<Integer>> m = source1.groupJoin(source2,
                 just(Flowable.never()),
                 just(duration1), add2);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source2.onNext(1);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -305,13 +305,13 @@ public class FlowableGroupJoinTest {
         Flowable<Flowable<Integer>> m = source1.groupJoin(source2,
                 fail,
                 just(Flowable.never()), add2);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -329,13 +329,13 @@ public class FlowableGroupJoinTest {
         Flowable<Flowable<Integer>> m = source1.groupJoin(source2,
                 just(Flowable.never()),
                 fail, add2);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source2.onNext(1);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -353,14 +353,14 @@ public class FlowableGroupJoinTest {
         Flowable<Integer> m = source1.groupJoin(source2,
                 just(Flowable.never()),
                 just(Flowable.never()), fail);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
         source2.onNext(2);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -477,55 +477,62 @@ public class FlowableGroupJoinTest {
 
     @Test
     public void innerErrorRight() {
-        Flowable.just(1)
-        .groupJoin(
-            Flowable.just(2),
-            new Function<Integer, Flowable<Object>>() {
-                @Override
-                public Flowable<Object> apply(Integer left) throws Exception {
-                    return Flowable.never();
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            Flowable.just(1)
+            .groupJoin(
+                Flowable.just(2),
+                new Function<Integer, Flowable<Object>>() {
+                    @Override
+                    public Flowable<Object> apply(Integer left) throws Exception {
+                        return Flowable.never();
+                    }
+                },
+                new Function<Integer, Flowable<Object>>() {
+                    @Override
+                    public Flowable<Object> apply(Integer right) throws Exception {
+                        return Flowable.error(new TestException());
+                    }
+                },
+                new BiFunction<Integer, Flowable<Integer>, Flowable<Integer>>() {
+                    @Override
+                    public Flowable<Integer> apply(Integer r, Flowable<Integer> l) throws Exception {
+                        return l;
+                    }
                 }
-            },
-            new Function<Integer, Flowable<Object>>() {
-                @Override
-                public Flowable<Object> apply(Integer right) throws Exception {
-                    return Flowable.error(new TestException());
-                }
-            },
-            new BiFunction<Integer, Flowable<Integer>, Flowable<Integer>>() {
-                @Override
-                public Flowable<Integer> apply(Integer r, Flowable<Integer> l) throws Exception {
-                    return l;
-                }
-            }
-        )
-        .flatMap(Functions.<Flowable<Integer>>identity())
-        .test()
-        .assertFailure(TestException.class);
+            )
+            .flatMap(Functions.<Flowable<Integer>>identity())
+            .test()
+            .assertFailure(TestException.class);
+
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
+        } finally {
+            RxJavaPlugins.reset();
+        }
     }
 
     @Test
     public void innerErrorRace() {
-        for (int i = 0; i < 500; i++) {
-            final PublishProcessor<Object> ps1 = PublishProcessor.create();
-            final PublishProcessor<Object> ps2 = PublishProcessor.create();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final PublishProcessor<Object> pp1 = PublishProcessor.create();
+            final PublishProcessor<Object> pp2 = PublishProcessor.create();
 
             List<Throwable> errors = TestHelper.trackPluginErrors();
 
             try {
-                TestSubscriber<Flowable<Integer>> to = Flowable.just(1)
+                TestSubscriber<Flowable<Integer>> ts = Flowable.just(1)
                 .groupJoin(
                     Flowable.just(2).concatWith(Flowable.<Integer>never()),
                     new Function<Integer, Flowable<Object>>() {
                         @Override
                         public Flowable<Object> apply(Integer left) throws Exception {
-                            return ps1;
+                            return pp1;
                         }
                     },
                     new Function<Integer, Flowable<Object>>() {
                         @Override
                         public Flowable<Object> apply(Integer right) throws Exception {
-                            return ps2;
+                            return pp2;
                         }
                     },
                     new BiFunction<Integer, Flowable<Integer>, Flowable<Integer>>() {
@@ -543,28 +550,28 @@ public class FlowableGroupJoinTest {
                 Runnable r1 = new Runnable() {
                     @Override
                     public void run() {
-                        ps1.onError(ex1);
+                        pp1.onError(ex1);
                     }
                 };
                 Runnable r2 = new Runnable() {
                     @Override
                     public void run() {
-                        ps2.onError(ex2);
+                        pp2.onError(ex2);
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
-                to.assertError(Throwable.class).assertSubscribed().assertNotComplete().assertValueCount(1);
+                ts.assertError(Throwable.class).assertSubscribed().assertNotComplete().assertValueCount(1);
 
-                Throwable exc = to.errors().get(0);
+                Throwable exc = ts.errors().get(0);
 
                 if (exc instanceof CompositeException) {
                     List<Throwable> es = TestHelper.compositeList(exc);
                     TestHelper.assertError(es, 0, TestException.class);
                     TestHelper.assertError(es, 1, TestException.class);
                 } else {
-                    to.assertError(TestException.class);
+                    ts.assertError(TestException.class);
                 }
 
                 if (!errors.isEmpty()) {
@@ -578,16 +585,16 @@ public class FlowableGroupJoinTest {
 
     @Test
     public void outerErrorRace() {
-        for (int i = 0; i < 500; i++) {
-            final PublishProcessor<Object> ps1 = PublishProcessor.create();
-            final PublishProcessor<Object> ps2 = PublishProcessor.create();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final PublishProcessor<Object> pp1 = PublishProcessor.create();
+            final PublishProcessor<Object> pp2 = PublishProcessor.create();
 
             List<Throwable> errors = TestHelper.trackPluginErrors();
 
             try {
-                TestSubscriber<Object> to = ps1
+                TestSubscriber<Object> ts = pp1
                 .groupJoin(
-                    ps2,
+                    pp2,
                     new Function<Object, Flowable<Object>>() {
                         @Override
                         public Flowable<Object> apply(Object left) throws Exception {
@@ -616,28 +623,28 @@ public class FlowableGroupJoinTest {
                 Runnable r1 = new Runnable() {
                     @Override
                     public void run() {
-                        ps1.onError(ex1);
+                        pp1.onError(ex1);
                     }
                 };
                 Runnable r2 = new Runnable() {
                     @Override
                     public void run() {
-                        ps2.onError(ex2);
+                        pp2.onError(ex2);
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
-                to.assertError(Throwable.class).assertSubscribed().assertNotComplete().assertNoValues();
+                ts.assertError(Throwable.class).assertSubscribed().assertNotComplete().assertNoValues();
 
-                Throwable exc = to.errors().get(0);
+                Throwable exc = ts.errors().get(0);
 
                 if (exc instanceof CompositeException) {
                     List<Throwable> es = TestHelper.compositeList(exc);
                     TestHelper.assertError(es, 0, TestException.class);
                     TestHelper.assertError(es, 1, TestException.class);
                 } else {
-                    to.assertError(TestException.class);
+                    ts.assertError(TestException.class);
                 }
 
                 if (!errors.isEmpty()) {
@@ -651,12 +658,12 @@ public class FlowableGroupJoinTest {
 
     @Test
     public void rightEmission() {
-        final PublishProcessor<Object> ps1 = PublishProcessor.create();
-        final PublishProcessor<Object> ps2 = PublishProcessor.create();
+        final PublishProcessor<Object> pp1 = PublishProcessor.create();
+        final PublishProcessor<Object> pp2 = PublishProcessor.create();
 
-        TestSubscriber<Object> to = ps1
+        TestSubscriber<Object> ts = pp1
         .groupJoin(
-            ps2,
+            pp2,
             new Function<Object, Flowable<Object>>() {
                 @Override
                 public Flowable<Object> apply(Object left) throws Exception {
@@ -679,13 +686,48 @@ public class FlowableGroupJoinTest {
         .flatMap(Functions.<Flowable<Object>>identity())
         .test();
 
-        ps2.onNext(2);
+        pp2.onNext(2);
 
-        ps1.onNext(1);
-        ps1.onComplete();
+        pp1.onNext(1);
+        pp1.onComplete();
 
-        ps2.onComplete();
+        pp2.onComplete();
 
-        to.assertResult(2);
+        ts.assertResult(2);
+    }
+
+    @Test
+    public void leftRightState() {
+        JoinSupport js = mock(JoinSupport.class);
+
+        LeftRightSubscriber o = new LeftRightSubscriber(js, false);
+
+        assertFalse(o.isDisposed());
+
+        o.onNext(1);
+        o.onNext(2);
+
+        o.dispose();
+
+        assertTrue(o.isDisposed());
+
+        verify(js).innerValue(false, 1);
+        verify(js).innerValue(false, 2);
+    }
+
+    @Test
+    public void leftRightEndState() {
+        JoinSupport js = mock(JoinSupport.class);
+
+        LeftRightEndSubscriber o = new LeftRightEndSubscriber(js, false, 0);
+
+        assertFalse(o.isDisposed());
+
+        o.onNext(1);
+        o.onNext(2);
+
+        assertTrue(o.isDisposed());
+
+        verify(js).innerClose(false, o);
     }
 }

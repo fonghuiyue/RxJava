@@ -20,6 +20,8 @@ import io.reactivex.*;
 import io.reactivex.disposables.*;
 import io.reactivex.plugins.RxJavaPlugins;
 
+import static io.reactivex.internal.util.ExceptionHelper.timeoutMessage;
+
 public final class CompletableTimeout extends Completable {
 
     final CompletableSource source;
@@ -38,29 +40,29 @@ public final class CompletableTimeout extends Completable {
     }
 
     @Override
-    public void subscribeActual(final CompletableObserver s) {
+    public void subscribeActual(final CompletableObserver observer) {
         final CompositeDisposable set = new CompositeDisposable();
-        s.onSubscribe(set);
+        observer.onSubscribe(set);
 
         final AtomicBoolean once = new AtomicBoolean();
 
-        Disposable timer = scheduler.scheduleDirect(new DisposeTask(once, set, s), timeout, unit);
+        Disposable timer = scheduler.scheduleDirect(new DisposeTask(once, set, observer), timeout, unit);
 
         set.add(timer);
 
-        source.subscribe(new TimeOutObserver(set, once, s));
+        source.subscribe(new TimeOutObserver(set, once, observer));
     }
 
     static final class TimeOutObserver implements CompletableObserver {
 
         private final CompositeDisposable set;
         private final AtomicBoolean once;
-        private final CompletableObserver s;
+        private final CompletableObserver downstream;
 
-        TimeOutObserver(CompositeDisposable set, AtomicBoolean once, CompletableObserver s) {
+        TimeOutObserver(CompositeDisposable set, AtomicBoolean once, CompletableObserver observer) {
             this.set = set;
             this.once = once;
-            this.s = s;
+            this.downstream = observer;
         }
 
         @Override
@@ -72,7 +74,7 @@ public final class CompletableTimeout extends Completable {
         public void onError(Throwable e) {
             if (once.compareAndSet(false, true)) {
                 set.dispose();
-                s.onError(e);
+                downstream.onError(e);
             } else {
                 RxJavaPlugins.onError(e);
             }
@@ -82,7 +84,7 @@ public final class CompletableTimeout extends Completable {
         public void onComplete() {
             if (once.compareAndSet(false, true)) {
                 set.dispose();
-                s.onComplete();
+                downstream.onComplete();
             }
         }
 
@@ -91,12 +93,12 @@ public final class CompletableTimeout extends Completable {
     final class DisposeTask implements Runnable {
         private final AtomicBoolean once;
         final CompositeDisposable set;
-        final CompletableObserver s;
+        final CompletableObserver downstream;
 
-        DisposeTask(AtomicBoolean once, CompositeDisposable set, CompletableObserver s) {
+        DisposeTask(AtomicBoolean once, CompositeDisposable set, CompletableObserver observer) {
             this.once = once;
             this.set = set;
-            this.s = s;
+            this.downstream = observer;
         }
 
         @Override
@@ -104,7 +106,7 @@ public final class CompletableTimeout extends Completable {
             if (once.compareAndSet(false, true)) {
                 set.clear();
                 if (other == null) {
-                    s.onError(new TimeoutException());
+                    downstream.onError(new TimeoutException(timeoutMessage(timeout, unit)));
                 } else {
                     other.subscribe(new DisposeObserver());
                 }
@@ -121,13 +123,13 @@ public final class CompletableTimeout extends Completable {
             @Override
             public void onError(Throwable e) {
                 set.dispose();
-                s.onError(e);
+                downstream.onError(e);
             }
 
             @Override
             public void onComplete() {
                 set.dispose();
-                s.onComplete();
+                downstream.onComplete();
             }
 
         }

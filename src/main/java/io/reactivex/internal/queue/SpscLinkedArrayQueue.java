@@ -92,8 +92,8 @@ public final class SpscLinkedArrayQueue<T> implements SimplePlainQueue<T> {
     }
 
     private boolean writeToQueue(final AtomicReferenceArray<Object> buffer, final T e, final long index, final int offset) {
-        soElement(buffer, offset, e);// StoreStore
-        soProducerIndex(index + 1);// this ensures atomic write of long on 32bit platforms
+        soElement(buffer, offset, e); // StoreStore
+        soProducerIndex(index + 1); // this ensures atomic write of long on 32bit platforms
         return true;
     }
 
@@ -103,19 +103,23 @@ public final class SpscLinkedArrayQueue<T> implements SimplePlainQueue<T> {
         final AtomicReferenceArray<Object> newBuffer = new AtomicReferenceArray<Object>(capacity);
         producerBuffer = newBuffer;
         producerLookAhead = currIndex + mask - 1;
-        soElement(newBuffer, offset, e);// StoreStore
+        soElement(newBuffer, offset, e); // StoreStore
         soNext(oldBuffer, newBuffer);
         soElement(oldBuffer, offset, HAS_NEXT); // new buffer is visible after element is
                                                                  // inserted
-        soProducerIndex(currIndex + 1);// this ensures correctness on 32bit platforms
+        soProducerIndex(currIndex + 1); // this ensures correctness on 32bit platforms
     }
 
     private void soNext(AtomicReferenceArray<Object> curr, AtomicReferenceArray<Object> next) {
         soElement(curr, calcDirectOffset(curr.length() - 1), next);
     }
+
     @SuppressWarnings("unchecked")
-    private AtomicReferenceArray<Object> lvNext(AtomicReferenceArray<Object> curr) {
-        return (AtomicReferenceArray<Object>)lvElement(curr, calcDirectOffset(curr.length() - 1));
+    private AtomicReferenceArray<Object> lvNextBufferAndUnlink(AtomicReferenceArray<Object> curr, int nextIndex) {
+        int nextOffset = calcDirectOffset(nextIndex);
+        AtomicReferenceArray<Object> nextBuffer = (AtomicReferenceArray<Object>)lvElement(curr, nextOffset);
+        soElement(curr, nextOffset, null); // Avoid GC nepotism
+        return nextBuffer;
     }
     /**
      * {@inheritDoc}
@@ -131,14 +135,14 @@ public final class SpscLinkedArrayQueue<T> implements SimplePlainQueue<T> {
         final long index = lpConsumerIndex();
         final int mask = consumerMask;
         final int offset = calcWrappedOffset(index, mask);
-        final Object e = lvElement(buffer, offset);// LoadLoad
+        final Object e = lvElement(buffer, offset); // LoadLoad
         boolean isNextBuffer = e == HAS_NEXT;
         if (null != e && !isNextBuffer) {
-            soElement(buffer, offset, null);// StoreStore
-            soConsumerIndex(index + 1);// this ensures correctness on 32bit platforms
+            soElement(buffer, offset, null); // StoreStore
+            soConsumerIndex(index + 1); // this ensures correctness on 32bit platforms
             return (T) e;
         } else if (isNextBuffer) {
-            return newBufferPoll(lvNext(buffer), index, mask);
+            return newBufferPoll(lvNextBufferAndUnlink(buffer, mask + 1), index, mask);
         }
 
         return null;
@@ -148,10 +152,10 @@ public final class SpscLinkedArrayQueue<T> implements SimplePlainQueue<T> {
     private T newBufferPoll(AtomicReferenceArray<Object> nextBuffer, final long index, final int mask) {
         consumerBuffer = nextBuffer;
         final int offsetInNew = calcWrappedOffset(index, mask);
-        final T n = (T) lvElement(nextBuffer, offsetInNew);// LoadLoad
+        final T n = (T) lvElement(nextBuffer, offsetInNew); // LoadLoad
         if (null != n) {
-            soElement(nextBuffer, offsetInNew, null);// StoreStore
-            soConsumerIndex(index + 1);// this ensures correctness on 32bit platforms
+            soElement(nextBuffer, offsetInNew, null); // StoreStore
+            soConsumerIndex(index + 1); // this ensures correctness on 32bit platforms
         }
         return n;
     }
@@ -162,9 +166,9 @@ public final class SpscLinkedArrayQueue<T> implements SimplePlainQueue<T> {
         final long index = lpConsumerIndex();
         final int mask = consumerMask;
         final int offset = calcWrappedOffset(index, mask);
-        final Object e = lvElement(buffer, offset);// LoadLoad
+        final Object e = lvElement(buffer, offset); // LoadLoad
         if (e == HAS_NEXT) {
-            return newBufferPeek(lvNext(buffer), index, mask);
+            return newBufferPeek(lvNextBufferAndUnlink(buffer, mask + 1), index, mask);
         }
 
         return (T) e;
@@ -174,8 +178,9 @@ public final class SpscLinkedArrayQueue<T> implements SimplePlainQueue<T> {
     private T newBufferPeek(AtomicReferenceArray<Object> nextBuffer, final long index, final int mask) {
         consumerBuffer = nextBuffer;
         final int offsetInNew = calcWrappedOffset(index, mask);
-        return (T) lvElement(nextBuffer, offsetInNew);// LoadLoad
+        return (T) lvElement(nextBuffer, offsetInNew); // LoadLoad
     }
+
     @Override
     public void clear() {
         while (poll() != null || !isEmpty()) { } // NOPMD
@@ -272,13 +277,13 @@ public final class SpscLinkedArrayQueue<T> implements SimplePlainQueue<T> {
             producerBuffer = newBuffer;
 
             pi = calcWrappedOffset(p, m);
-            soElement(newBuffer, pi + 1, second);// StoreStore
+            soElement(newBuffer, pi + 1, second); // StoreStore
             soElement(newBuffer, pi, first);
             soNext(buffer, newBuffer);
 
             soElement(buffer, pi, HAS_NEXT); // new buffer is visible after element is
 
-            soProducerIndex(p + 2);// this ensures correctness on 32bit platforms
+            soProducerIndex(p + 2); // this ensures correctness on 32bit platforms
         }
 
         return true;

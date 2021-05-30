@@ -50,15 +50,15 @@ public final class FlowableFlatMapCompletable<T> extends AbstractFlowableWithUps
     }
 
     @Override
-    protected void subscribeActual(Subscriber<? super T> observer) {
-        source.subscribe(new FlatMapCompletableMainSubscriber<T>(observer, mapper, delayErrors, maxConcurrency));
+    protected void subscribeActual(Subscriber<? super T> subscriber) {
+        source.subscribe(new FlatMapCompletableMainSubscriber<T>(subscriber, mapper, delayErrors, maxConcurrency));
     }
 
     static final class FlatMapCompletableMainSubscriber<T> extends BasicIntQueueSubscription<T>
     implements FlowableSubscriber<T> {
         private static final long serialVersionUID = 8443155186132538303L;
 
-        final Subscriber<? super T> actual;
+        final Subscriber<? super T> downstream;
 
         final AtomicThrowable errors;
 
@@ -70,12 +70,14 @@ public final class FlowableFlatMapCompletable<T> extends AbstractFlowableWithUps
 
         final int maxConcurrency;
 
-        Subscription s;
+        Subscription upstream;
 
-        FlatMapCompletableMainSubscriber(Subscriber<? super T> observer,
+        volatile boolean cancelled;
+
+        FlatMapCompletableMainSubscriber(Subscriber<? super T> subscriber,
                 Function<? super T, ? extends CompletableSource> mapper, boolean delayErrors,
                 int maxConcurrency) {
-            this.actual = observer;
+            this.downstream = subscriber;
             this.mapper = mapper;
             this.delayErrors = delayErrors;
             this.errors = new AtomicThrowable();
@@ -86,10 +88,10 @@ public final class FlowableFlatMapCompletable<T> extends AbstractFlowableWithUps
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (SubscriptionHelper.validate(this.s, s)) {
-                this.s = s;
+            if (SubscriptionHelper.validate(this.upstream, s)) {
+                this.upstream = s;
 
-                actual.onSubscribe(this);
+                downstream.onSubscribe(this);
 
                 int m = maxConcurrency;
                 if (m == Integer.MAX_VALUE) {
@@ -108,7 +110,7 @@ public final class FlowableFlatMapCompletable<T> extends AbstractFlowableWithUps
                 cs = ObjectHelper.requireNonNull(mapper.apply(value), "The mapper returned a null CompletableSource");
             } catch (Throwable ex) {
                 Exceptions.throwIfFatal(ex);
-                s.cancel();
+                upstream.cancel();
                 onError(ex);
                 return;
             }
@@ -117,7 +119,7 @@ public final class FlowableFlatMapCompletable<T> extends AbstractFlowableWithUps
 
             InnerConsumer inner = new InnerConsumer();
 
-            if (set.add(inner)) {
+            if (!cancelled && set.add(inner)) {
                 cs.subscribe(inner);
             }
         }
@@ -128,17 +130,17 @@ public final class FlowableFlatMapCompletable<T> extends AbstractFlowableWithUps
                 if (delayErrors) {
                     if (decrementAndGet() == 0) {
                         Throwable ex = errors.terminate();
-                        actual.onError(ex);
+                        downstream.onError(ex);
                     } else {
                         if (maxConcurrency != Integer.MAX_VALUE) {
-                            s.request(1);
+                            upstream.request(1);
                         }
                     }
                 } else {
                     cancel();
                     if (getAndSet(0) > 0) {
                         Throwable ex = errors.terminate();
-                        actual.onError(ex);
+                        downstream.onError(ex);
                     }
                 }
             } else {
@@ -151,20 +153,21 @@ public final class FlowableFlatMapCompletable<T> extends AbstractFlowableWithUps
             if (decrementAndGet() == 0) {
                 Throwable ex = errors.terminate();
                 if (ex != null) {
-                    actual.onError(ex);
+                    downstream.onError(ex);
                 } else {
-                    actual.onComplete();
+                    downstream.onComplete();
                 }
             } else {
                 if (maxConcurrency != Integer.MAX_VALUE) {
-                    s.request(1);
+                    upstream.request(1);
                 }
             }
         }
 
         @Override
         public void cancel() {
-            s.cancel();
+            cancelled = true;
+            upstream.cancel();
             set.dispose();
         }
 

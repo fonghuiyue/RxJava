@@ -19,6 +19,8 @@ import io.reactivex.*;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.internal.util.*;
 
+import static io.reactivex.internal.util.ExceptionHelper.timeoutMessage;
+
 /**
  * A combined Observer that awaits the success or error signal via a CountDownLatch.
  * @param <T> the value type
@@ -30,7 +32,7 @@ implements SingleObserver<T>, CompletableObserver, MaybeObserver<T> {
     T value;
     Throwable error;
 
-    Disposable d;
+    Disposable upstream;
 
     volatile boolean cancelled;
 
@@ -40,7 +42,7 @@ implements SingleObserver<T>, CompletableObserver, MaybeObserver<T> {
 
     void dispose() {
         cancelled = true;
-        Disposable d = this.d;
+        Disposable d = this.upstream;
         if (d != null) {
             d.dispose();
         }
@@ -48,7 +50,7 @@ implements SingleObserver<T>, CompletableObserver, MaybeObserver<T> {
 
     @Override
     public void onSubscribe(Disposable d) {
-        this.d = d;
+        this.upstream = d;
         if (cancelled) {
             d.dispose();
         }
@@ -148,7 +150,7 @@ implements SingleObserver<T>, CompletableObserver, MaybeObserver<T> {
                 BlockingHelper.verifyNonBlocking();
                 if (!await(timeout, unit)) {
                     dispose();
-                    throw ExceptionHelper.wrapOrThrow(new TimeoutException());
+                    throw ExceptionHelper.wrapOrThrow(new TimeoutException(timeoutMessage(timeout, unit)));
                 }
             } catch (InterruptedException ex) {
                 dispose();

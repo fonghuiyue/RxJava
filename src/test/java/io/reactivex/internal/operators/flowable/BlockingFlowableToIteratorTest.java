@@ -16,14 +16,18 @@ package io.reactivex.internal.operators.flowable;
 import static org.junit.Assert.*;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.*;
 import org.reactivestreams.*;
 
 import io.reactivex.Flowable;
+import io.reactivex.disposables.Disposable;
 import io.reactivex.exceptions.*;
 import io.reactivex.internal.operators.flowable.BlockingFlowableIterable.BlockingFlowableIterator;
 import io.reactivex.internal.subscriptions.BooleanSubscription;
+import io.reactivex.processors.PublishProcessor;
+import io.reactivex.schedulers.Schedulers;
 
 public class BlockingFlowableToIteratorTest {
 
@@ -33,16 +37,16 @@ public class BlockingFlowableToIteratorTest {
 
         Iterator<String> it = obs.blockingIterable().iterator();
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         assertEquals("one", it.next());
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         assertEquals("two", it.next());
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         assertEquals("three", it.next());
 
-        assertEquals(false, it.hasNext());
+        assertFalse(it.hasNext());
 
     }
 
@@ -51,19 +55,19 @@ public class BlockingFlowableToIteratorTest {
         Flowable<String> obs = Flowable.unsafeCreate(new Publisher<String>() {
 
             @Override
-            public void subscribe(Subscriber<? super String> observer) {
-                observer.onSubscribe(new BooleanSubscription());
-                observer.onNext("one");
-                observer.onError(new TestException());
+            public void subscribe(Subscriber<? super String> subscriber) {
+                subscriber.onSubscribe(new BooleanSubscription());
+                subscriber.onNext("one");
+                subscriber.onError(new TestException());
             }
         });
 
         Iterator<String> it = obs.blockingIterable().iterator();
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         assertEquals("one", it.next());
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         it.next();
     }
 
@@ -184,5 +188,29 @@ public class BlockingFlowableToIteratorTest {
         .iterator();
 
         it.next();
+    }
+
+    @Test(expected = NoSuchElementException.class)
+    public void disposedIteratorHasNextReturns() {
+        Iterator<Integer> it = PublishProcessor.<Integer>create()
+                .blockingIterable().iterator();
+        ((Disposable)it).dispose();
+        assertFalse(it.hasNext());
+        it.next();
+    }
+
+    @Test
+    public void asyncDisposeUnblocks() {
+        final Iterator<Integer> it = PublishProcessor.<Integer>create()
+                .blockingIterable().iterator();
+
+        Schedulers.single().scheduleDirect(new Runnable() {
+            @Override
+            public void run() {
+                ((Disposable)it).dispose();
+            }
+        }, 1, TimeUnit.SECONDS);
+
+        assertFalse(it.hasNext());
     }
 }

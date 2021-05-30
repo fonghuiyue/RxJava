@@ -44,7 +44,6 @@ public final class BlockingObservableIterable<T> implements Iterable<T> {
     extends AtomicReference<Disposable>
     implements io.reactivex.Observer<T>, Iterator<T>, Disposable {
 
-
         private static final long serialVersionUID = 6695226475494099826L;
 
         final SpscLinkedArrayQueue<T> queue;
@@ -54,7 +53,7 @@ public final class BlockingObservableIterable<T> implements Iterable<T> {
         final Condition condition;
 
         volatile boolean done;
-        Throwable error;
+        volatile Throwable error;
 
         BlockingObservableIterator(int batchSize) {
             this.queue = new SpscLinkedArrayQueue<T>(batchSize);
@@ -65,6 +64,13 @@ public final class BlockingObservableIterable<T> implements Iterable<T> {
         @Override
         public boolean hasNext() {
             for (;;) {
+                if (isDisposed()) {
+                    Throwable e = error;
+                    if (e != null) {
+                        throw ExceptionHelper.wrapOrThrow(e);
+                    }
+                    return false;
+                }
                 boolean d = done;
                 boolean empty = queue.isEmpty();
                 if (d) {
@@ -81,7 +87,7 @@ public final class BlockingObservableIterable<T> implements Iterable<T> {
                         BlockingHelper.verifyNonBlocking();
                         lock.lock();
                         try {
-                            while (!done && queue.isEmpty()) {
+                            while (!done && queue.isEmpty() && !isDisposed()) {
                                 condition.await();
                             }
                         } finally {
@@ -107,8 +113,8 @@ public final class BlockingObservableIterable<T> implements Iterable<T> {
         }
 
         @Override
-        public void onSubscribe(Disposable s) {
-            DisposableHelper.setOnce(this, s);
+        public void onSubscribe(Disposable d) {
+            DisposableHelper.setOnce(this, d);
         }
 
         @Override
@@ -147,6 +153,7 @@ public final class BlockingObservableIterable<T> implements Iterable<T> {
         @Override
         public void dispose() {
             DisposableHelper.dispose(this);
+            signalConsumer();
         }
 
         @Override

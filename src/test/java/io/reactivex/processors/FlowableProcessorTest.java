@@ -13,6 +13,8 @@
 
 package io.reactivex.processors;
 
+import static org.junit.Assert.*;
+
 import org.junit.Test;
 
 public abstract class FlowableProcessorTest<T> {
@@ -21,25 +23,29 @@ public abstract class FlowableProcessorTest<T> {
 
     @Test
     public void onNextNull() {
-        final FlowableProcessor<T> p = create();
+        FlowableProcessor<T> p = create();
 
-        p.onNext(null);
+        try {
+            p.onNext(null);
+            fail("No NullPointerException thrown");
+        } catch (NullPointerException ex) {
+            assertEquals("onNext called with null. Null values are generally not allowed in 2.x operators and sources.", ex.getMessage());
+        }
 
-        p.test()
-                .assertNoValues()
-                .assertError(NullPointerException.class)
-                .assertErrorMessage("onNext called with null. Null values are generally not allowed in 2.x operators and sources.");
+        p.test().assertEmpty().cancel();
     }
 
     @Test
     public void onErrorNull() {
-        final FlowableProcessor<T> p = create();
+        FlowableProcessor<T> p = create();
 
-        p.onError(null);
+        try {
+            p.onError(null);
+            fail("No NullPointerException thrown");
+        } catch (NullPointerException ex) {
+            assertEquals("onError called with null. Null values are generally not allowed in 2.x operators and sources.", ex.getMessage());
+        }
 
-        p.test()
-                .assertNoValues()
-                .assertError(NullPointerException.class)
-                .assertErrorMessage("onError called with null. Null values are generally not allowed in 2.x operators and sources.");
+        p.test().assertEmpty().cancel();
     }
 }

@@ -50,7 +50,7 @@ public class ObservableConcatMapEagerTest {
     @Test
     @Ignore("Observable doesn't do backpressure")
     public void normalBackpressured() {
-//        TestObserver<Integer> ts = Observable.range(1, 5)
+//        TestObserver<Integer> to = Observable.range(1, 5)
 //        .concatMapEager(new Function<Integer, ObservableSource<Integer>>() {
 //            @Override
 //            public ObservableSource<Integer> apply(Integer t) {
@@ -59,19 +59,19 @@ public class ObservableConcatMapEagerTest {
 //        })
 //        .test(3);
 //
-//        ts.assertValues(1, 2, 2);
+//        to.assertValues(1, 2, 2);
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertValues(1, 2, 2, 3);
+//        to.assertValues(1, 2, 2, 3);
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertValues(1, 2, 2, 3, 3);
+//        to.assertValues(1, 2, 2, 3, 3);
 //
-//        ts.request(5);
+//        to.request(5);
 //
-//        ts.assertResult(1, 2, 2, 3, 3, 4, 4, 5, 5, 6);
+//        to.assertResult(1, 2, 2, 3, 3, 4, 4, 5, 5, 6);
     }
 
     @Test
@@ -90,7 +90,7 @@ public class ObservableConcatMapEagerTest {
     @Test
     @Ignore("Observable doesn't do backpressure")
     public void normalDelayBoundaryBackpressured() {
-//        TestObserver<Integer> ts = Observable.range(1, 5)
+//        TestObserver<Integer> to = Observable.range(1, 5)
 //        .concatMapEagerDelayError(new Function<Integer, ObservableSource<Integer>>() {
 //            @Override
 //            public ObservableSource<Integer> apply(Integer t) {
@@ -99,19 +99,19 @@ public class ObservableConcatMapEagerTest {
 //        }, false)
 //        .test(3);
 //
-//        ts.assertValues(1, 2, 2);
+//        to.assertValues(1, 2, 2);
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertValues(1, 2, 2, 3);
+//        to.assertValues(1, 2, 2, 3);
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertValues(1, 2, 2, 3, 3);
+//        to.assertValues(1, 2, 2, 3, 3);
 //
-//        ts.request(5);
+//        to.request(5);
 //
-//        ts.assertResult(1, 2, 2, 3, 3, 4, 4, 5, 5, 6);
+//        to.assertResult(1, 2, 2, 3, 3, 4, 4, 5, 5, 6);
     }
 
     @Test
@@ -130,7 +130,7 @@ public class ObservableConcatMapEagerTest {
     @Test
     @Ignore("Observable doesn't do backpressure")
     public void normalDelayEndBackpressured() {
-//        TestObserver<Integer> ts = Observable.range(1, 5)
+//        TestObserver<Integer> to = Observable.range(1, 5)
 //        .concatMapEagerDelayError(new Function<Integer, ObservableSource<Integer>>() {
 //            @Override
 //            public ObservableSource<Integer> apply(Integer t) {
@@ -139,19 +139,19 @@ public class ObservableConcatMapEagerTest {
 //        }, true)
 //        .test(3);
 //
-//        ts.assertValues(1, 2, 2);
+//        to.assertValues(1, 2, 2);
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertValues(1, 2, 2, 3);
+//        to.assertValues(1, 2, 2, 3);
 //
-//        ts.request(1);
+//        to.request(1);
 //
-//        ts.assertValues(1, 2, 2, 3, 3);
+//        to.assertValues(1, 2, 2, 3, 3);
 //
-//        ts.request(5);
+//        to.request(5);
 //
-//        ts.assertResult(1, 2, 2, 3, 3, 4, 4, 5, 5, 6);
+//        to.assertResult(1, 2, 2, 3, 3, 4, 4, 5, 5, 6);
     }
 
     @Test
@@ -159,7 +159,7 @@ public class ObservableConcatMapEagerTest {
         PublishSubject<Integer> main = PublishSubject.create();
         final PublishSubject<Integer> inner = PublishSubject.create();
 
-        TestObserver<Integer> ts = main.concatMapEagerDelayError(
+        TestObserver<Integer> to = main.concatMapEagerDelayError(
                 new Function<Integer, ObservableSource<Integer>>() {
                     @Override
                     public ObservableSource<Integer> apply(Integer t) {
@@ -171,16 +171,16 @@ public class ObservableConcatMapEagerTest {
 
         inner.onNext(2);
 
-        ts.assertValue(2);
+        to.assertValue(2);
 
         main.onError(new TestException("Forced failure"));
 
-        ts.assertNoErrors();
+        to.assertNoErrors();
 
         inner.onNext(3);
         inner.onComplete();
 
-        ts.assertFailureAndMessage(TestException.class, "Forced failure", 2, 3);
+        to.assertFailureAndMessage(TestException.class, "Forced failure", 2, 3);
     }
 
     @Test
@@ -188,7 +188,7 @@ public class ObservableConcatMapEagerTest {
         PublishSubject<Integer> main = PublishSubject.create();
         final PublishSubject<Integer> inner = PublishSubject.create();
 
-        TestObserver<Integer> ts = main.concatMapEagerDelayError(
+        TestObserver<Integer> to = main.concatMapEagerDelayError(
                 new Function<Integer, ObservableSource<Integer>>() {
                     @Override
                     public ObservableSource<Integer> apply(Integer t) {
@@ -201,16 +201,16 @@ public class ObservableConcatMapEagerTest {
 
         inner.onNext(2);
 
-        ts.assertValue(2);
+        to.assertValue(2);
 
         main.onError(new TestException("Forced failure"));
 
-        ts.assertNoErrors();
+        to.assertNoErrors();
 
         inner.onNext(3);
         inner.onComplete();
 
-        ts.assertFailureAndMessage(TestException.class, "Forced failure", 2, 3, 2, 3);
+        to.assertFailureAndMessage(TestException.class, "Forced failure", 2, 3, 2, 3);
     }
 
     @Test
@@ -218,7 +218,7 @@ public class ObservableConcatMapEagerTest {
         PublishSubject<Integer> main = PublishSubject.create();
         final PublishSubject<Integer> inner = PublishSubject.create();
 
-        TestObserver<Integer> ts = main.concatMapEager(
+        TestObserver<Integer> to = main.concatMapEager(
                 new Function<Integer, ObservableSource<Integer>>() {
                     @Override
                     public ObservableSource<Integer> apply(Integer t) {
@@ -231,7 +231,7 @@ public class ObservableConcatMapEagerTest {
 
         inner.onNext(2);
 
-        ts.assertValue(2);
+        to.assertValue(2);
 
         main.onError(new TestException("Forced failure"));
 
@@ -240,7 +240,7 @@ public class ObservableConcatMapEagerTest {
         inner.onNext(3);
         inner.onComplete();
 
-        ts.assertFailureAndMessage(TestException.class, "Forced failure", 2);
+        to.assertFailureAndMessage(TestException.class, "Forced failure", 2);
     }
 
     @Test
@@ -259,7 +259,7 @@ public class ObservableConcatMapEagerTest {
         .assertComplete();
     }
 
-    TestObserver<Object> ts;
+    TestObserver<Object> to;
 
     Function<Integer, Observable<Integer>> toJust = new Function<Integer, Observable<Integer>>() {
         @Override
@@ -277,25 +277,25 @@ public class ObservableConcatMapEagerTest {
 
     @Before
     public void before() {
-        ts = new TestObserver<Object>();
+        to = new TestObserver<Object>();
     }
 
     @Test
     public void testSimple() {
-        Observable.range(1, 100).concatMapEager(toJust).subscribe(ts);
+        Observable.range(1, 100).concatMapEager(toJust).subscribe(to);
 
-        ts.assertNoErrors();
-        ts.assertValueCount(100);
-        ts.assertComplete();
+        to.assertNoErrors();
+        to.assertValueCount(100);
+        to.assertComplete();
     }
 
     @Test
     public void testSimple2() {
-        Observable.range(1, 100).concatMapEager(toRange).subscribe(ts);
+        Observable.range(1, 100).concatMapEager(toRange).subscribe(to);
 
-        ts.assertNoErrors();
-        ts.assertValueCount(200);
-        ts.assertComplete();
+        to.assertNoErrors();
+        to.assertValueCount(200);
+        to.assertComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -309,13 +309,13 @@ public class ObservableConcatMapEagerTest {
             }
         }).hide();
 
-        Observable.concatArrayEager(source, source).subscribe(ts);
+        Observable.concatArrayEager(source, source).subscribe(to);
 
         Assert.assertEquals(2, count.get());
 
-        ts.assertValueCount(count.get());
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValueCount(count.get());
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -329,13 +329,13 @@ public class ObservableConcatMapEagerTest {
             }
         }).hide();
 
-        Observable.concatArrayEager(source, source, source).subscribe(ts);
+        Observable.concatArrayEager(source, source, source).subscribe(to);
 
         Assert.assertEquals(3, count.get());
 
-        ts.assertValueCount(count.get());
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValueCount(count.get());
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -349,13 +349,13 @@ public class ObservableConcatMapEagerTest {
             }
         }).hide();
 
-        Observable.concatArrayEager(source, source, source, source).subscribe(ts);
+        Observable.concatArrayEager(source, source, source, source).subscribe(to);
 
         Assert.assertEquals(4, count.get());
 
-        ts.assertValueCount(count.get());
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValueCount(count.get());
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -369,13 +369,13 @@ public class ObservableConcatMapEagerTest {
             }
         }).hide();
 
-        Observable.concatArrayEager(source, source, source, source, source).subscribe(ts);
+        Observable.concatArrayEager(source, source, source, source, source).subscribe(to);
 
         Assert.assertEquals(5, count.get());
 
-        ts.assertValueCount(count.get());
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValueCount(count.get());
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -389,13 +389,13 @@ public class ObservableConcatMapEagerTest {
             }
         }).hide();
 
-        Observable.concatArrayEager(source, source, source, source, source, source).subscribe(ts);
+        Observable.concatArrayEager(source, source, source, source, source, source).subscribe(to);
 
         Assert.assertEquals(6, count.get());
 
-        ts.assertValueCount(count.get());
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValueCount(count.get());
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -409,13 +409,13 @@ public class ObservableConcatMapEagerTest {
             }
         }).hide();
 
-        Observable.concatArrayEager(source, source, source, source, source, source, source).subscribe(ts);
+        Observable.concatArrayEager(source, source, source, source, source, source, source).subscribe(to);
 
         Assert.assertEquals(7, count.get());
 
-        ts.assertValueCount(count.get());
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValueCount(count.get());
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -429,13 +429,13 @@ public class ObservableConcatMapEagerTest {
             }
         }).hide();
 
-        Observable.concatArrayEager(source, source, source, source, source, source, source, source).subscribe(ts);
+        Observable.concatArrayEager(source, source, source, source, source, source, source, source).subscribe(to);
 
         Assert.assertEquals(8, count.get());
 
-        ts.assertValueCount(count.get());
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValueCount(count.get());
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -449,22 +449,22 @@ public class ObservableConcatMapEagerTest {
             }
         }).hide();
 
-        Observable.concatArrayEager(source, source, source, source, source, source, source, source, source).subscribe(ts);
+        Observable.concatArrayEager(source, source, source, source, source, source, source, source, source).subscribe(to);
 
         Assert.assertEquals(9, count.get());
 
-        ts.assertValueCount(count.get());
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValueCount(count.get());
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @Test
     public void testMainError() {
-        Observable.<Integer>error(new TestException()).concatMapEager(toJust).subscribe(ts);
+        Observable.<Integer>error(new TestException()).concatMapEager(toJust).subscribe(to);
 
-        ts.assertNoValues();
-        ts.assertError(TestException.class);
-        ts.assertNotComplete();
+        to.assertNoValues();
+        to.assertError(TestException.class);
+        to.assertNotComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -475,23 +475,23 @@ public class ObservableConcatMapEagerTest {
         PublishSubject<Integer> ps = PublishSubject.create();
 
         Observable.concatArrayEager(Observable.just(1), ps)
-        .subscribe(ts);
+        .subscribe(to);
 
         ps.onError(new TestException());
 
-        ts.assertValue(1);
-        ts.assertError(TestException.class);
-        ts.assertNotComplete();
+        to.assertValue(1);
+        to.assertError(TestException.class);
+        to.assertNotComplete();
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void testInnerEmpty() {
-        Observable.concatArrayEager(Observable.empty(), Observable.empty()).subscribe(ts);
+        Observable.concatArrayEager(Observable.empty(), Observable.empty()).subscribe(to);
 
-        ts.assertNoValues();
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertNoValues();
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @Test
@@ -501,11 +501,11 @@ public class ObservableConcatMapEagerTest {
             public Observable<Integer> apply(Integer t) {
                 throw new TestException();
             }
-        }).subscribe(ts);
+        }).subscribe(to);
 
-        ts.assertNoValues();
-        ts.assertNotComplete();
-        ts.assertError(TestException.class);
+        to.assertNoValues();
+        to.assertNotComplete();
+        to.assertError(TestException.class);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -546,11 +546,11 @@ public class ObservableConcatMapEagerTest {
             public Observable<Integer> apply(Integer t) {
                 return Observable.range(1, 1000).subscribeOn(Schedulers.computation());
             }
-        }).observeOn(Schedulers.newThread()).subscribe(ts);
+        }).observeOn(Schedulers.newThread()).subscribe(to);
 
-        ts.awaitTerminalEvent(5, TimeUnit.SECONDS);
-        ts.assertNoErrors();
-        ts.assertValueCount(2000);
+        to.awaitTerminalEvent(5, TimeUnit.SECONDS);
+        to.assertNoErrors();
+        to.assertValueCount(2000);
     }
 
     @Test
@@ -573,13 +573,13 @@ public class ObservableConcatMapEagerTest {
                 }
             }
         })
-        .subscribe(ts);
+        .subscribe(to);
 
         subject.onNext(1);
 
-        ts.assertNoErrors();
-        ts.assertNotComplete();
-        ts.assertValues(1, 2);
+        to.assertNoErrors();
+        to.assertNotComplete();
+        to.assertValues(1, 2);
     }
 
     @Test
@@ -587,7 +587,7 @@ public class ObservableConcatMapEagerTest {
     public void testPrefetchIsBounded() {
         final AtomicInteger count = new AtomicInteger();
 
-        TestObserver<Object> ts = TestObserver.create();
+        TestObserver<Object> to = TestObserver.create();
 
         Observable.just(1).concatMapEager(new Function<Integer, Observable<Integer>>() {
             @Override
@@ -600,11 +600,11 @@ public class ObservableConcatMapEagerTest {
                             }
                         }).hide();
             }
-        }).subscribe(ts);
+        }).subscribe(to);
 
-        ts.assertNoErrors();
-        ts.assertNoValues();
-        ts.assertNotComplete();
+        to.assertNoErrors();
+        to.assertNoValues();
+        to.assertNotComplete();
         Assert.assertEquals(Observable.bufferSize(), count.get());
     }
 
@@ -616,13 +616,12 @@ public class ObservableConcatMapEagerTest {
             public Observable<Integer> apply(Integer t) {
                 return Observable.just(null);
             }
-        }).subscribe(ts);
+        }).subscribe(to);
 
-        ts.assertNoErrors();
-        ts.assertComplete();
-        ts.assertValue(null);
+        to.assertNoErrors();
+        to.assertComplete();
+        to.assertValue(null);
     }
-
 
     @Test
     @Ignore("Observable doesn't do backpressure")
@@ -663,13 +662,13 @@ public class ObservableConcatMapEagerTest {
 
             Method m = Observable.class.getMethod("concatEager", clazz);
 
-            TestObserver<Integer> ts = TestObserver.create();
+            TestObserver<Integer> to = TestObserver.create();
 
-            ((Observable<Integer>)m.invoke(null, (Object[])obs)).subscribe(ts);
+            ((Observable<Integer>)m.invoke(null, (Object[])obs)).subscribe(to);
 
-            ts.assertValues(expected);
-            ts.assertNoErrors();
-            ts.assertComplete();
+            to.assertValues(expected);
+            to.assertNoErrors();
+            to.assertComplete();
         }
     }
 
@@ -677,37 +676,37 @@ public class ObservableConcatMapEagerTest {
     @Test
     public void capacityHint() {
         Observable<Integer> source = Observable.just(1);
-        TestObserver<Integer> ts = TestObserver.create();
+        TestObserver<Integer> to = TestObserver.create();
 
-        Observable.concatEager(Arrays.asList(source, source, source), 1, 1).subscribe(ts);
+        Observable.concatEager(Arrays.asList(source, source, source), 1, 1).subscribe(to);
 
-        ts.assertValues(1, 1, 1);
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValues(1, 1, 1);
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @Test
     public void Observable() {
         Observable<Integer> source = Observable.just(1);
-        TestObserver<Integer> ts = TestObserver.create();
+        TestObserver<Integer> to = TestObserver.create();
 
-        Observable.concatEager(Observable.just(source, source, source)).subscribe(ts);
+        Observable.concatEager(Observable.just(source, source, source)).subscribe(to);
 
-        ts.assertValues(1, 1, 1);
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValues(1, 1, 1);
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @Test
     public void ObservableCapacityHint() {
         Observable<Integer> source = Observable.just(1);
-        TestObserver<Integer> ts = TestObserver.create();
+        TestObserver<Integer> to = TestObserver.create();
 
-        Observable.concatEager(Observable.just(source, source, source), 1, 1).subscribe(ts);
+        Observable.concatEager(Observable.just(source, source, source), 1, 1).subscribe(to);
 
-        ts.assertValues(1, 1, 1);
-        ts.assertNoErrors();
-        ts.assertComplete();
+        to.assertValues(1, 1, 1);
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @SuppressWarnings("unchecked")
@@ -807,7 +806,7 @@ public class ObservableConcatMapEagerTest {
 
     @Test
     public void innerOuterRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             List<Throwable> errors = TestHelper.trackPluginErrors();
             try {
                 final PublishSubject<Integer> ps1 = PublishSubject.create();
@@ -838,7 +837,7 @@ public class ObservableConcatMapEagerTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
                 to.assertSubscribed().assertNoValues().assertNotComplete();
 
@@ -862,7 +861,7 @@ public class ObservableConcatMapEagerTest {
 
     @Test
     public void nextCancelRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps1 = PublishSubject.create();
 
             final TestObserver<Integer> to = ps1.concatMapEager(new Function<Integer, ObservableSource<Integer>>() {
@@ -885,7 +884,7 @@ public class ObservableConcatMapEagerTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             to.assertEmpty();
         }
@@ -1000,5 +999,179 @@ public class ObservableConcatMapEagerTest {
         .awaitDone(5, TimeUnit.SECONDS)
         .assertResult(1, 2, 3, 4, 5)
         ;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void maxConcurrencyOf2() {
+        List<Integer>[] list = new ArrayList[100];
+        for (int i = 0; i < 100; i++) {
+            List<Integer> lst = new ArrayList<Integer>();
+            list[i] = lst;
+            for (int k = 1; k <= 10; k++) {
+                lst.add((i) * 10 + k);
+            }
+        }
+
+        Observable.range(1, 1000)
+        .buffer(10)
+        .concatMapEager(new Function<List<Integer>, ObservableSource<List<Integer>>>() {
+            @Override
+            public ObservableSource<List<Integer>> apply(List<Integer> v)
+                    throws Exception {
+                return Observable.just(v)
+                        .subscribeOn(Schedulers.io())
+                        .doOnNext(new Consumer<List<Integer>>() {
+                            @Override
+                            public void accept(List<Integer> v)
+                                    throws Exception {
+                                Thread.sleep(new Random().nextInt(20));
+                            }
+                        });
+            }
+        }
+                , 2, 3)
+        .test()
+        .awaitDone(5, TimeUnit.SECONDS)
+        .assertResult(list);
+    }
+
+    @Test
+    public void arrayDelayErrorDefault() {
+        PublishSubject<Integer> ps1 = PublishSubject.create();
+        PublishSubject<Integer> ps2 = PublishSubject.create();
+        PublishSubject<Integer> ps3 = PublishSubject.create();
+
+        @SuppressWarnings("unchecked")
+        TestObserver<Integer> to = Observable.concatArrayEagerDelayError(ps1, ps2, ps3)
+        .test();
+
+        to.assertEmpty();
+
+        assertTrue(ps1.hasObservers());
+        assertTrue(ps2.hasObservers());
+        assertTrue(ps3.hasObservers());
+
+        ps2.onNext(2);
+        ps2.onComplete();
+
+        to.assertEmpty();
+
+        ps1.onNext(1);
+
+        to.assertValuesOnly(1);
+
+        ps1.onComplete();
+
+        to.assertValuesOnly(1, 2);
+
+        ps3.onComplete();
+
+        to.assertResult(1, 2);
+    }
+
+    @Test
+    public void arrayDelayErrorMaxConcurrency() {
+        PublishSubject<Integer> ps1 = PublishSubject.create();
+        PublishSubject<Integer> ps2 = PublishSubject.create();
+        PublishSubject<Integer> ps3 = PublishSubject.create();
+
+        @SuppressWarnings("unchecked")
+        TestObserver<Integer> to = Observable.concatArrayEagerDelayError(2, 2, ps1, ps2, ps3)
+        .test();
+
+        to.assertEmpty();
+
+        assertTrue(ps1.hasObservers());
+        assertTrue(ps2.hasObservers());
+        assertFalse(ps3.hasObservers());
+
+        ps2.onNext(2);
+        ps2.onComplete();
+
+        to.assertEmpty();
+
+        ps1.onNext(1);
+
+        to.assertValuesOnly(1);
+
+        ps1.onComplete();
+
+        assertTrue(ps3.hasObservers());
+
+        to.assertValuesOnly(1, 2);
+
+        ps3.onComplete();
+
+        to.assertResult(1, 2);
+    }
+
+    @Test
+    public void arrayDelayErrorMaxConcurrencyErrorDelayed() {
+        PublishSubject<Integer> ps1 = PublishSubject.create();
+        PublishSubject<Integer> ps2 = PublishSubject.create();
+        PublishSubject<Integer> ps3 = PublishSubject.create();
+
+        @SuppressWarnings("unchecked")
+        TestObserver<Integer> to = Observable.concatArrayEagerDelayError(2, 2, ps1, ps2, ps3)
+        .test();
+
+        to.assertEmpty();
+
+        assertTrue(ps1.hasObservers());
+        assertTrue(ps2.hasObservers());
+        assertFalse(ps3.hasObservers());
+
+        ps2.onNext(2);
+        ps2.onError(new TestException());
+
+        to.assertEmpty();
+
+        ps1.onNext(1);
+
+        to.assertValuesOnly(1);
+
+        ps1.onComplete();
+
+        assertTrue(ps3.hasObservers());
+
+        to.assertValuesOnly(1, 2);
+
+        ps3.onComplete();
+
+        to.assertFailure(TestException.class, 1, 2);
+    }
+
+    @Test
+    public void cancelActive() {
+        PublishSubject<Integer> ps1 = PublishSubject.create();
+        PublishSubject<Integer> ps2 = PublishSubject.create();
+
+        TestObserver<Integer> to = Observable
+                .concatEager(Observable.just(ps1, ps2))
+                .test();
+
+        assertTrue(ps1.hasObservers());
+        assertTrue(ps2.hasObservers());
+
+        to.dispose();
+
+        assertFalse(ps1.hasObservers());
+        assertFalse(ps2.hasObservers());
+    }
+
+    @Test
+    public void cancelNoInnerYet() {
+        PublishSubject<Observable<Integer>> ps1 = PublishSubject.create();
+
+        TestObserver<Integer> to = Observable
+                .concatEager(ps1)
+                .test();
+
+        assertTrue(ps1.hasObservers());
+
+        to.dispose();
+
+        assertFalse(ps1.hasObservers());
     }
 }

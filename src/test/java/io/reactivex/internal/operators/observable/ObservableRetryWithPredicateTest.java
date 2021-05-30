@@ -14,7 +14,6 @@
 package io.reactivex.internal.operators.observable;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
@@ -33,7 +32,6 @@ import io.reactivex.exceptions.*;
 import io.reactivex.functions.*;
 import io.reactivex.internal.functions.Functions;
 import io.reactivex.observers.*;
-import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subjects.PublishSubject;
 
 public class ObservableRetryWithPredicateTest {
@@ -70,6 +68,7 @@ public class ObservableRetryWithPredicateTest {
         inOrder.verify(o).onComplete();
         verify(o, never()).onError(any(Throwable.class));
     }
+
     @Test
     public void testRetryTwice() {
         Observable<Integer> source = Observable.unsafeCreate(new ObservableSource<Integer>() {
@@ -90,8 +89,7 @@ public class ObservableRetryWithPredicateTest {
             }
         });
 
-        @SuppressWarnings("unchecked")
-        DefaultObserver<Integer> o = mock(DefaultObserver.class);
+        Observer<Integer> o = TestHelper.mockObserver();
         InOrder inOrder = inOrder(o);
 
         source.retry(retryTwice).subscribe(o);
@@ -106,6 +104,7 @@ public class ObservableRetryWithPredicateTest {
         verify(o, never()).onError(any(Throwable.class));
 
     }
+
     @Test
     public void testRetryTwiceAndGiveUp() {
         Observable<Integer> source = Observable.unsafeCreate(new ObservableSource<Integer>() {
@@ -118,8 +117,7 @@ public class ObservableRetryWithPredicateTest {
             }
         });
 
-        @SuppressWarnings("unchecked")
-        DefaultObserver<Integer> o = mock(DefaultObserver.class);
+        Observer<Integer> o = TestHelper.mockObserver();
         InOrder inOrder = inOrder(o);
 
         source.retry(retryTwice).subscribe(o);
@@ -134,6 +132,7 @@ public class ObservableRetryWithPredicateTest {
         verify(o, never()).onComplete();
 
     }
+
     @Test
     public void testRetryOnSpecificException() {
         Observable<Integer> source = Observable.unsafeCreate(new ObservableSource<Integer>() {
@@ -154,8 +153,7 @@ public class ObservableRetryWithPredicateTest {
             }
         });
 
-        @SuppressWarnings("unchecked")
-        DefaultObserver<Integer> o = mock(DefaultObserver.class);
+        Observer<Integer> o = TestHelper.mockObserver();
         InOrder inOrder = inOrder(o);
 
         source.retry(retryOnTestException).subscribe(o);
@@ -169,6 +167,7 @@ public class ObservableRetryWithPredicateTest {
         inOrder.verify(o).onComplete();
         verify(o, never()).onError(any(Throwable.class));
     }
+
     @Test
     public void testRetryOnSpecificExceptionAndNotOther() {
         final IOException ioe = new IOException();
@@ -191,8 +190,7 @@ public class ObservableRetryWithPredicateTest {
             }
         });
 
-        @SuppressWarnings("unchecked")
-        DefaultObserver<Integer> o = mock(DefaultObserver.class);
+        Observer<Integer> o = TestHelper.mockObserver();
         InOrder inOrder = inOrder(o);
 
         source.retry(retryOnTestException).subscribe(o);
@@ -230,7 +228,7 @@ public class ObservableRetryWithPredicateTest {
         Observer<Long> observer = TestHelper.mockObserver();
 
         // Observable that always fails after 100ms
-        ObservableRetryTest.SlowObservable so = new ObservableRetryTest.SlowObservable(100, 0);
+        ObservableRetryTest.SlowObservable so = new ObservableRetryTest.SlowObservable(100, 0, "testUnsubscribeAfterError");
         Observable<Long> o = Observable
                 .unsafeCreate(so)
                 .retry(retry5);
@@ -256,7 +254,7 @@ public class ObservableRetryWithPredicateTest {
         Observer<Long> observer = TestHelper.mockObserver();
 
         // Observable that sends every 100ms (timeout fails instead)
-        ObservableRetryTest.SlowObservable so = new ObservableRetryTest.SlowObservable(100, 10);
+        ObservableRetryTest.SlowObservable so = new ObservableRetryTest.SlowObservable(100, 10, "testTimeoutWithRetry");
         Observable<Long> o = Observable
                 .unsafeCreate(so)
                 .timeout(80, TimeUnit.MILLISECONDS)
@@ -278,7 +276,7 @@ public class ObservableRetryWithPredicateTest {
 
     @Test
     public void testIssue2826() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
         final RuntimeException e = new RuntimeException("You shall not pass");
         final AtomicInteger c = new AtomicInteger();
         Observable.just(1).map(new Function<Integer, Integer>() {
@@ -287,12 +285,13 @@ public class ObservableRetryWithPredicateTest {
                 c.incrementAndGet();
                 throw e;
             }
-        }).retry(retry5).subscribe(ts);
+        }).retry(retry5).subscribe(to);
 
-        ts.assertTerminated();
+        to.assertTerminated();
         assertEquals(6, c.get());
-        assertEquals(Collections.singletonList(e), ts.errors());
+        assertEquals(Collections.singletonList(e), to.errors());
     }
+
     @Test
     public void testJustAndRetry() throws Exception {
         final AtomicBoolean throwException = new AtomicBoolean(true);
@@ -334,7 +333,7 @@ public class ObservableRetryWithPredicateTest {
                 System.out.println(t);
                 list.add(t);
             }});
-        assertEquals(Arrays.asList(1L,1L,2L,3L), list);
+        assertEquals(Arrays.asList(1L, 1L, 2L, 3L), list);
     }
 
     @Test
@@ -358,7 +357,7 @@ public class ObservableRetryWithPredicateTest {
                 System.out.println(t);
                 list.add(t);
             }});
-        assertEquals(Arrays.asList(1L,1L,2L,3L), list);
+        assertEquals(Arrays.asList(1L, 1L, 2L, 3L), list);
     }
 
     @Test
@@ -390,7 +389,7 @@ public class ObservableRetryWithPredicateTest {
 
     @Test
     public void retryDisposeRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps = PublishSubject.create();
 
             final TestObserver<Integer> to = ps.retry(Functions.alwaysTrue()).test();
@@ -411,7 +410,7 @@ public class ObservableRetryWithPredicateTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             to.assertEmpty();
         }
@@ -438,7 +437,7 @@ public class ObservableRetryWithPredicateTest {
 
     @Test
     public void retryBiPredicateDisposeRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps = PublishSubject.create();
 
             final TestObserver<Integer> to = ps.retry(new BiPredicate<Object, Object>() {
@@ -464,7 +463,7 @@ public class ObservableRetryWithPredicateTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             to.assertEmpty();
         }

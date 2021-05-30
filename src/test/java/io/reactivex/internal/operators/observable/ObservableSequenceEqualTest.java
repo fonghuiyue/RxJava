@@ -13,7 +13,6 @@
 
 package io.reactivex.internal.operators.observable;
 
-import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
 
 import org.junit.*;
@@ -150,9 +149,9 @@ public class ObservableSequenceEqualTest {
         inOrder.verifyNoMoreInteractions();
     }
 
-    private void verifyError(Single<Boolean> observable) {
+    private void verifyError(Single<Boolean> single) {
         SingleObserver<Boolean> observer = TestHelper.mockSingleObserver();
-        observable.subscribe(observer);
+        single.subscribe(observer);
 
         InOrder inOrder = inOrder(observer);
         inOrder.verify(observer, times(1)).onError(isA(TestException.class));
@@ -316,7 +315,7 @@ public class ObservableSequenceEqualTest {
 
     @Test
     public void onNextCancelRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps = PublishSubject.create();
 
             final TestObserver<Boolean> to = Observable.sequenceEqual(Observable.never(), ps).test();
@@ -343,7 +342,7 @@ public class ObservableSequenceEqualTest {
 
     @Test
     public void onNextCancelRaceObservable() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps = PublishSubject.create();
 
             final TestObserver<Boolean> to = Observable.sequenceEqual(Observable.never(), ps).toObservable().test();

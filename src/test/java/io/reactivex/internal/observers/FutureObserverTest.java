@@ -13,6 +13,7 @@
 
 package io.reactivex.internal.observers;
 
+import static io.reactivex.internal.util.ExceptionHelper.timeoutMessage;
 import static org.junit.Assert.*;
 
 import java.util.*;
@@ -135,16 +136,16 @@ public class FutureObserverTest {
 
         try {
 
-            Disposable s = Disposables.empty();
+            Disposable d1 = Disposables.empty();
 
-            fo.onSubscribe(s);
+            fo.onSubscribe(d1);
 
-            Disposable s2 = Disposables.empty();
+            Disposable d2 = Disposables.empty();
 
-            fo.onSubscribe(s2);
+            fo.onSubscribe(d2);
 
-            assertFalse(s.isDisposed());
-            assertTrue(s2.isDisposed());
+            assertFalse(d1.isDisposed());
+            assertTrue(d2.isDisposed());
 
             TestHelper.assertError(errors, 0, IllegalStateException.class, "Disposable already set!");
         } finally {
@@ -154,7 +155,7 @@ public class FutureObserverTest {
 
     @Test
     public void cancelRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final FutureSubscriber<Integer> fo = new FutureSubscriber<Integer>();
 
             Runnable r = new Runnable() {
@@ -164,7 +165,7 @@ public class FutureObserverTest {
                 }
             };
 
-            TestHelper.race(r, r, Schedulers.single());
+            TestHelper.race(r, r);
         }
     }
 
@@ -185,7 +186,7 @@ public class FutureObserverTest {
     public void onErrorCancelRace() {
         RxJavaPlugins.setErrorHandler(Functions.emptyConsumer());
         try {
-            for (int i = 0; i < 500; i++) {
+            for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
                 final FutureSubscriber<Integer> fo = new FutureSubscriber<Integer>();
 
                 final TestException ex = new TestException();
@@ -204,7 +205,7 @@ public class FutureObserverTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
             }
         } finally {
             RxJavaPlugins.reset();
@@ -213,83 +214,115 @@ public class FutureObserverTest {
 
     @Test
     public void onCompleteCancelRace() {
-        for (int i = 0; i < 500; i++) {
-            final FutureSubscriber<Integer> fo = new FutureSubscriber<Integer>();
+        RxJavaPlugins.setErrorHandler(Functions.emptyConsumer());
+        try {
+            for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+                final FutureSubscriber<Integer> fo = new FutureSubscriber<Integer>();
 
-            if (i % 3 == 0) {
-                fo.onSubscribe(new BooleanSubscription());
-            }
-
-            if (i % 2 == 0) {
-                fo.onNext(1);
-            }
-
-            Runnable r1 = new Runnable() {
-                @Override
-                public void run() {
-                    fo.cancel(false);
+                if (i % 3 == 0) {
+                    fo.onSubscribe(new BooleanSubscription());
                 }
-            };
 
-            Runnable r2 = new Runnable() {
-                @Override
-                public void run() {
-                    fo.onComplete();
+                if (i % 2 == 0) {
+                    fo.onNext(1);
                 }
-            };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+                Runnable r1 = new Runnable() {
+                    @Override
+                    public void run() {
+                        fo.cancel(false);
+                    }
+                };
+
+                Runnable r2 = new Runnable() {
+                    @Override
+                    public void run() {
+                        fo.onComplete();
+                    }
+                };
+
+                TestHelper.race(r1, r2);
+            }
+        } finally {
+            RxJavaPlugins.reset();
         }
     }
 
     @Test
     public void onErrorOnComplete() throws Exception {
-        fo.onError(new TestException("One"));
-        fo.onComplete();
-
+        List<Throwable> errors = TestHelper.trackPluginErrors();
         try {
-            fo.get(5, TimeUnit.MILLISECONDS);
-        } catch (ExecutionException ex) {
-            assertTrue(ex.toString(), ex.getCause() instanceof TestException);
-            assertEquals("One", ex.getCause().getMessage());
+            fo.onError(new TestException("One"));
+            fo.onComplete();
+
+            try {
+                fo.get(5, TimeUnit.MILLISECONDS);
+            } catch (ExecutionException ex) {
+                assertTrue(ex.toString(), ex.getCause() instanceof TestException);
+                assertEquals("One", ex.getCause().getMessage());
+            }
+
+            TestHelper.assertUndeliverable(errors, 0, NoSuchElementException.class);
+        } finally {
+            RxJavaPlugins.reset();
         }
     }
 
     @Test
     public void onCompleteOnError() throws Exception {
-        fo.onComplete();
-        fo.onError(new TestException("One"));
-
+        List<Throwable> errors = TestHelper.trackPluginErrors();
         try {
-            assertNull(fo.get(5, TimeUnit.MILLISECONDS));
-        } catch (ExecutionException ex) {
-            assertTrue(ex.toString(), ex.getCause() instanceof NoSuchElementException);
+            fo.onComplete();
+            fo.onError(new TestException("One"));
+
+            try {
+                assertNull(fo.get(5, TimeUnit.MILLISECONDS));
+            } catch (ExecutionException ex) {
+                assertTrue(ex.toString(), ex.getCause() instanceof NoSuchElementException);
+            }
+
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
+        } finally {
+            RxJavaPlugins.reset();
         }
     }
 
     @Test
     public void cancelOnError() throws Exception {
-        fo.cancel(true);
-        fo.onError(new TestException("One"));
-
+        List<Throwable> errors = TestHelper.trackPluginErrors();
         try {
-            fo.get(5, TimeUnit.MILLISECONDS);
-            fail("Should have thrown");
-        } catch (CancellationException ex) {
-            // expected
+            fo.cancel(true);
+            fo.onError(new TestException("One"));
+
+            try {
+                fo.get(5, TimeUnit.MILLISECONDS);
+                fail("Should have thrown");
+            } catch (CancellationException ex) {
+                // expected
+            }
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
+        } finally {
+            RxJavaPlugins.reset();
         }
     }
 
     @Test
     public void cancelOnComplete() throws Exception {
-        fo.cancel(true);
-        fo.onComplete();
-
+        List<Throwable> errors = TestHelper.trackPluginErrors();
         try {
-            fo.get(5, TimeUnit.MILLISECONDS);
-            fail("Should have thrown");
-        } catch (CancellationException ex) {
-            // expected
+            fo.cancel(true);
+            fo.onComplete();
+
+            try {
+                fo.get(5, TimeUnit.MILLISECONDS);
+                fail("Should have thrown");
+            } catch (CancellationException ex) {
+                // expected
+            }
+
+            TestHelper.assertUndeliverable(errors, 0, NoSuchElementException.class);
+        } finally {
+            RxJavaPlugins.reset();
         }
     }
 
@@ -319,5 +352,15 @@ public class FutureObserverTest {
         }, 500, TimeUnit.MILLISECONDS);
 
         assertEquals(1, fo.get().intValue());
+    }
+
+    @Test
+    public void getTimedOut() throws Exception {
+        try {
+            fo.get(1, TimeUnit.NANOSECONDS);
+            fail("Should have thrown");
+        } catch (TimeoutException expected) {
+            assertEquals(timeoutMessage(1, TimeUnit.NANOSECONDS), expected.getMessage());
+        }
     }
 }

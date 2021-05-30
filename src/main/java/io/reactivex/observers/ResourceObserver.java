@@ -49,13 +49,13 @@ import io.reactivex.internal.util.EndConsumerHelper;
  * If for some reason this can't be avoided, use {@link io.reactivex.Observable#safeSubscribe(io.reactivex.Observer)}
  * instead of the standard {@code subscribe()} method.
  *
- * <p>Example<code><pre>
+ * <p>Example<pre><code>
  * Disposable d =
  *     Observable.range(1, 5)
- *     .subscribeWith(new ResourceObserver&lt;Integer>() {
+ *     .subscribeWith(new ResourceObserver&lt;Integer&gt;() {
  *         &#64;Override public void onStart() {
  *             add(Schedulers.single()
- *                 .scheduleDirect(() -> System.out.println("Time!"),
+ *                 .scheduleDirect(() -&gt; System.out.println("Time!"),
  *                     2, TimeUnit.SECONDS));
  *             request(1);
  *         }
@@ -76,13 +76,13 @@ import io.reactivex.internal.util.EndConsumerHelper;
  *     });
  * // ...
  * d.dispose();
- * </pre></code>
+ * </code></pre>
  *
  * @param <T> the value type
  */
 public abstract class ResourceObserver<T> implements Observer<T>, Disposable {
     /** The active subscription. */
-    private final AtomicReference<Disposable> s = new AtomicReference<Disposable>();
+    private final AtomicReference<Disposable> upstream = new AtomicReference<Disposable>();
 
     /** The resource composite, can never be null. */
     private final ListCompositeDisposable resources = new ListCompositeDisposable();
@@ -100,8 +100,8 @@ public abstract class ResourceObserver<T> implements Observer<T>, Disposable {
     }
 
     @Override
-    public final void onSubscribe(Disposable s) {
-        if (EndConsumerHelper.setOnce(this.s, s, getClass())) {
+    public final void onSubscribe(Disposable d) {
+        if (EndConsumerHelper.setOnce(this.upstream, d, getClass())) {
             onStart();
         }
     }
@@ -124,7 +124,7 @@ public abstract class ResourceObserver<T> implements Observer<T>, Disposable {
      */
     @Override
     public final void dispose() {
-        if (DisposableHelper.dispose(s)) {
+        if (DisposableHelper.dispose(upstream)) {
             resources.dispose();
         }
     }
@@ -135,6 +135,6 @@ public abstract class ResourceObserver<T> implements Observer<T>, Disposable {
      */
     @Override
     public final boolean isDisposed() {
-        return DisposableHelper.isDisposed(s.get());
+        return DisposableHelper.isDisposed(upstream.get());
     }
 }

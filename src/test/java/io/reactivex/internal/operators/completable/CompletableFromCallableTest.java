@@ -13,12 +13,21 @@
 
 package io.reactivex.internal.operators.completable;
 
-import io.reactivex.Completable;
-import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.Test;
-
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.*;
+
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.Test;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+
+import io.reactivex.*;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.exceptions.TestException;
+import io.reactivex.observers.TestObserver;
+import io.reactivex.schedulers.Schedulers;
 
 public class CompletableFromCallableTest {
     @Test(expected = NullPointerException.class)
@@ -99,5 +108,74 @@ public class CompletableFromCallableTest {
         })
             .test()
             .assertFailure(UnsupportedOperationException.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotDeliverResultIfSubscriberUnsubscribedBeforeEmission() throws Exception {
+        Callable<String> func = mock(Callable.class);
+
+        final CountDownLatch funcLatch = new CountDownLatch(1);
+        final CountDownLatch observerLatch = new CountDownLatch(1);
+
+        when(func.call()).thenAnswer(new Answer<String>() {
+            @Override
+            public String answer(InvocationOnMock invocation) throws Throwable {
+                observerLatch.countDown();
+
+                try {
+                    funcLatch.await();
+                } catch (InterruptedException e) {
+                    // It's okay, unsubscription causes Thread interruption
+
+                    // Restoring interruption status of the Thread
+                    Thread.currentThread().interrupt();
+                }
+
+                return "should_not_be_delivered";
+            }
+        });
+
+        Completable fromCallableObservable = Completable.fromCallable(func);
+
+        Observer<Object> observer = TestHelper.mockObserver();
+
+        TestObserver<String> outer = new TestObserver<String>(observer);
+
+        fromCallableObservable
+                .subscribeOn(Schedulers.computation())
+                .subscribe(outer);
+
+        // Wait until func will be invoked
+        observerLatch.await();
+
+        // Unsubscribing before emission
+        outer.cancel();
+
+        // Emitting result
+        funcLatch.countDown();
+
+        // func must be invoked
+        verify(func).call();
+
+        // Observer must not be notified at all
+        verify(observer).onSubscribe(any(Disposable.class));
+        verifyNoMoreInteractions(observer);
+    }
+
+    @Test
+    public void fromActionErrorsDisposed() {
+        final AtomicInteger calls = new AtomicInteger();
+        Completable.fromCallable(new Callable<Object>() {
+            @Override
+            public Object call() throws Exception {
+                calls.incrementAndGet();
+                throw new TestException();
+            }
+        })
+        .test(true)
+        .assertEmpty();
+
+        assertEquals(1, calls.get());
     }
 }

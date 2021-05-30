@@ -23,6 +23,8 @@ import io.reactivex.internal.disposables.DisposableHelper;
 import io.reactivex.internal.util.BlockingHelper;
 import io.reactivex.plugins.RxJavaPlugins;
 
+import static io.reactivex.internal.util.ExceptionHelper.timeoutMessage;
+
 /**
  * An Observer + Future that expects exactly one upstream value and provides it
  * via the (blocking) Future API.
@@ -35,22 +37,22 @@ implements Observer<T>, Future<T>, Disposable {
     T value;
     Throwable error;
 
-    final AtomicReference<Disposable> s;
+    final AtomicReference<Disposable> upstream;
 
     public FutureObserver() {
         super(1);
-        this.s = new AtomicReference<Disposable>();
+        this.upstream = new AtomicReference<Disposable>();
     }
 
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
         for (;;) {
-            Disposable a = s.get();
+            Disposable a = upstream.get();
             if (a == this || a == DisposableHelper.DISPOSED) {
                 return false;
             }
 
-            if (s.compareAndSet(a, DisposableHelper.DISPOSED)) {
+            if (upstream.compareAndSet(a, DisposableHelper.DISPOSED)) {
                 if (a != null) {
                     a.dispose();
                 }
@@ -62,7 +64,7 @@ implements Observer<T>, Future<T>, Disposable {
 
     @Override
     public boolean isCancelled() {
-        return DisposableHelper.isDisposed(s.get());
+        return DisposableHelper.isDisposed(upstream.get());
     }
 
     @Override
@@ -92,7 +94,7 @@ implements Observer<T>, Future<T>, Disposable {
         if (getCount() != 0) {
             BlockingHelper.verifyNonBlocking();
             if (!await(timeout, unit)) {
-                throw new TimeoutException();
+                throw new TimeoutException(timeoutMessage(timeout, unit));
             }
         }
 
@@ -108,14 +110,14 @@ implements Observer<T>, Future<T>, Disposable {
     }
 
     @Override
-    public void onSubscribe(Disposable s) {
-        DisposableHelper.setOnce(this.s, s);
+    public void onSubscribe(Disposable d) {
+        DisposableHelper.setOnce(this.upstream, d);
     }
 
     @Override
     public void onNext(T t) {
         if (value != null) {
-            s.get().dispose();
+            upstream.get().dispose();
             onError(new IndexOutOfBoundsException("More than one element received"));
             return;
         }
@@ -128,12 +130,12 @@ implements Observer<T>, Future<T>, Disposable {
             error = t;
 
             for (;;) {
-                Disposable a = s.get();
+                Disposable a = upstream.get();
                 if (a == this || a == DisposableHelper.DISPOSED) {
                     RxJavaPlugins.onError(t);
                     return;
                 }
-                if (s.compareAndSet(a, this)) {
+                if (upstream.compareAndSet(a, this)) {
                     countDown();
                     return;
                 }
@@ -150,11 +152,11 @@ implements Observer<T>, Future<T>, Disposable {
             return;
         }
         for (;;) {
-            Disposable a = s.get();
+            Disposable a = upstream.get();
             if (a == this || a == DisposableHelper.DISPOSED) {
                 return;
             }
-            if (s.compareAndSet(a, this)) {
+            if (upstream.compareAndSet(a, this)) {
                 countDown();
                 return;
             }

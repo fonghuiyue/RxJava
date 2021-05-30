@@ -29,24 +29,26 @@ public final class FlowableRepeat<T> extends AbstractFlowableWithUpstream<T, T> 
 
     @Override
     public void subscribeActual(Subscriber<? super T> s) {
-        SubscriptionArbiter sa = new SubscriptionArbiter();
+        SubscriptionArbiter sa = new SubscriptionArbiter(false);
         s.onSubscribe(sa);
 
         RepeatSubscriber<T> rs = new RepeatSubscriber<T>(s, count != Long.MAX_VALUE ? count - 1 : Long.MAX_VALUE, sa, source);
         rs.subscribeNext();
     }
 
-    // FIXME update to a fresh Rsc algorithm
     static final class RepeatSubscriber<T> extends AtomicInteger implements FlowableSubscriber<T> {
 
         private static final long serialVersionUID = -7098360935104053232L;
 
-        final Subscriber<? super T> actual;
+        final Subscriber<? super T> downstream;
         final SubscriptionArbiter sa;
         final Publisher<? extends T> source;
         long remaining;
+
+        long produced;
+
         RepeatSubscriber(Subscriber<? super T> actual, long count, SubscriptionArbiter sa, Publisher<? extends T> source) {
-            this.actual = actual;
+            this.downstream = actual;
             this.sa = sa;
             this.source = source;
             this.remaining = count;
@@ -59,12 +61,13 @@ public final class FlowableRepeat<T> extends AbstractFlowableWithUpstream<T, T> 
 
         @Override
         public void onNext(T t) {
-            actual.onNext(t);
-            sa.produced(1L);
+            produced++;
+            downstream.onNext(t);
         }
+
         @Override
         public void onError(Throwable t) {
-            actual.onError(t);
+            downstream.onError(t);
         }
 
         @Override
@@ -76,7 +79,7 @@ public final class FlowableRepeat<T> extends AbstractFlowableWithUpstream<T, T> 
             if (r != 0L) {
                 subscribeNext();
             } else {
-                actual.onComplete();
+                downstream.onComplete();
             }
         }
 
@@ -89,6 +92,11 @@ public final class FlowableRepeat<T> extends AbstractFlowableWithUpstream<T, T> 
                 for (;;) {
                     if (sa.isCancelled()) {
                         return;
+                    }
+                    long p = produced;
+                    if (p != 0L) {
+                        produced = 0L;
+                        sa.produced(p);
                     }
                     source.subscribe(this);
 

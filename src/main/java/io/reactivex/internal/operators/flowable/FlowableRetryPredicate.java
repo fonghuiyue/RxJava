@@ -35,26 +35,28 @@ public final class FlowableRetryPredicate<T> extends AbstractFlowableWithUpstrea
 
     @Override
     public void subscribeActual(Subscriber<? super T> s) {
-        SubscriptionArbiter sa = new SubscriptionArbiter();
+        SubscriptionArbiter sa = new SubscriptionArbiter(false);
         s.onSubscribe(sa);
 
-        RepeatSubscriber<T> rs = new RepeatSubscriber<T>(s, count, predicate, sa, source);
+        RetrySubscriber<T> rs = new RetrySubscriber<T>(s, count, predicate, sa, source);
         rs.subscribeNext();
     }
 
-    // FIXME update to a fresh Rsc algorithm
-    static final class RepeatSubscriber<T> extends AtomicInteger implements FlowableSubscriber<T> {
+    static final class RetrySubscriber<T> extends AtomicInteger implements FlowableSubscriber<T> {
 
         private static final long serialVersionUID = -7098360935104053232L;
 
-        final Subscriber<? super T> actual;
+        final Subscriber<? super T> downstream;
         final SubscriptionArbiter sa;
         final Publisher<? extends T> source;
         final Predicate<? super Throwable> predicate;
         long remaining;
-        RepeatSubscriber(Subscriber<? super T> actual, long count,
+
+        long produced;
+
+        RetrySubscriber(Subscriber<? super T> actual, long count,
                 Predicate<? super Throwable> predicate, SubscriptionArbiter sa, Publisher<? extends T> source) {
-            this.actual = actual;
+            this.downstream = actual;
             this.sa = sa;
             this.source = source;
             this.predicate = predicate;
@@ -68,9 +70,10 @@ public final class FlowableRetryPredicate<T> extends AbstractFlowableWithUpstrea
 
         @Override
         public void onNext(T t) {
-            actual.onNext(t);
-            sa.produced(1L);
+            produced++;
+            downstream.onNext(t);
         }
+
         @Override
         public void onError(Throwable t) {
             long r = remaining;
@@ -78,18 +81,18 @@ public final class FlowableRetryPredicate<T> extends AbstractFlowableWithUpstrea
                 remaining = r - 1;
             }
             if (r == 0) {
-                actual.onError(t);
+                downstream.onError(t);
             } else {
                 boolean b;
                 try {
                     b = predicate.test(t);
                 } catch (Throwable e) {
                     Exceptions.throwIfFatal(e);
-                    actual.onError(new CompositeException(t, e));
+                    downstream.onError(new CompositeException(t, e));
                     return;
                 }
                 if (!b) {
-                    actual.onError(t);
+                    downstream.onError(t);
                     return;
                 }
                 subscribeNext();
@@ -98,7 +101,7 @@ public final class FlowableRetryPredicate<T> extends AbstractFlowableWithUpstrea
 
         @Override
         public void onComplete() {
-            actual.onComplete();
+            downstream.onComplete();
         }
 
         /**
@@ -111,6 +114,13 @@ public final class FlowableRetryPredicate<T> extends AbstractFlowableWithUpstrea
                     if (sa.isCancelled()) {
                         return;
                     }
+
+                    long p = produced;
+                    if (p != 0L) {
+                        produced = 0L;
+                        sa.produced(p);
+                    }
+
                     source.subscribe(this);
 
                     missed = addAndGet(-missed);

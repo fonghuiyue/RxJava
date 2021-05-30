@@ -13,6 +13,7 @@
 
 package io.reactivex.internal.observers;
 
+import static io.reactivex.internal.util.ExceptionHelper.timeoutMessage;
 import static org.junit.Assert.*;
 
 import java.util.concurrent.*;
@@ -22,7 +23,8 @@ import org.junit.Test;
 import io.reactivex.*;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.exceptions.TestException;
-import io.reactivex.schedulers.Schedulers;
+import io.reactivex.internal.functions.Functions;
+import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.subjects.PublishSubject;
 
 public class FutureSingleObserverTest {
@@ -66,7 +68,7 @@ public class FutureSingleObserverTest {
 
     @Test
     public void cancelRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final Future<?> f = Single.never().toFuture();
 
             Runnable r = new Runnable() {
@@ -76,7 +78,7 @@ public class FutureSingleObserverTest {
                 }
             };
 
-            TestHelper.race(r, r, Schedulers.single());
+            TestHelper.race(r, r);
         }
     }
 
@@ -88,8 +90,8 @@ public class FutureSingleObserverTest {
         try {
             f.get(100, TimeUnit.MILLISECONDS);
             fail("Should have thrown");
-        } catch (TimeoutException ex) {
-            // expected
+        } catch (TimeoutException expected) {
+            assertEquals(timeoutMessage(100, TimeUnit.MILLISECONDS), expected.getMessage());
         }
     }
 
@@ -130,7 +132,7 @@ public class FutureSingleObserverTest {
 
     @Test
     public void onSuccessCancelRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps = PublishSubject.create();
 
             final Future<?> f = ps.single(-99).toFuture();
@@ -151,34 +153,39 @@ public class FutureSingleObserverTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 
     @Test
     public void onErrorCancelRace() {
-        for (int i = 0; i < 500; i++) {
-            final PublishSubject<Integer> ps = PublishSubject.create();
+        RxJavaPlugins.setErrorHandler(Functions.emptyConsumer());
+        try {
+            for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+                final PublishSubject<Integer> ps = PublishSubject.create();
 
-            final Future<?> f = ps.single(-99).toFuture();
+                final Future<?> f = ps.single(-99).toFuture();
 
-            final TestException ex = new TestException();
+                final TestException ex = new TestException();
 
-            Runnable r1 = new Runnable() {
-                @Override
-                public void run() {
-                    f.cancel(true);
-                }
-            };
+                Runnable r1 = new Runnable() {
+                    @Override
+                    public void run() {
+                        f.cancel(true);
+                    }
+                };
 
-            Runnable r2 = new Runnable() {
-                @Override
-                public void run() {
-                    ps.onError(ex);
-                }
-            };
+                Runnable r2 = new Runnable() {
+                    @Override
+                    public void run() {
+                        ps.onError(ex);
+                    }
+                };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
+            }
+        } finally {
+            RxJavaPlugins.reset();
         }
     }
 }

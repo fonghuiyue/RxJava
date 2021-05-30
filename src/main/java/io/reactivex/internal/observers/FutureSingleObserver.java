@@ -22,6 +22,8 @@ import io.reactivex.internal.disposables.DisposableHelper;
 import io.reactivex.internal.util.BlockingHelper;
 import io.reactivex.plugins.RxJavaPlugins;
 
+import static io.reactivex.internal.util.ExceptionHelper.timeoutMessage;
+
 /**
  * An Observer + Future that expects exactly one upstream value and provides it
  * via the (blocking) Future API.
@@ -34,22 +36,22 @@ implements SingleObserver<T>, Future<T>, Disposable {
     T value;
     Throwable error;
 
-    final AtomicReference<Disposable> s;
+    final AtomicReference<Disposable> upstream;
 
     public FutureSingleObserver() {
         super(1);
-        this.s = new AtomicReference<Disposable>();
+        this.upstream = new AtomicReference<Disposable>();
     }
 
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
         for (;;) {
-            Disposable a = s.get();
+            Disposable a = upstream.get();
             if (a == this || a == DisposableHelper.DISPOSED) {
                 return false;
             }
 
-            if (s.compareAndSet(a, DisposableHelper.DISPOSED)) {
+            if (upstream.compareAndSet(a, DisposableHelper.DISPOSED)) {
                 if (a != null) {
                     a.dispose();
                 }
@@ -61,7 +63,7 @@ implements SingleObserver<T>, Future<T>, Disposable {
 
     @Override
     public boolean isCancelled() {
-        return DisposableHelper.isDisposed(s.get());
+        return DisposableHelper.isDisposed(upstream.get());
     }
 
     @Override
@@ -91,7 +93,7 @@ implements SingleObserver<T>, Future<T>, Disposable {
         if (getCount() != 0) {
             BlockingHelper.verifyNonBlocking();
             if (!await(timeout, unit)) {
-                throw new TimeoutException();
+                throw new TimeoutException(timeoutMessage(timeout, unit));
             }
         }
 
@@ -107,31 +109,31 @@ implements SingleObserver<T>, Future<T>, Disposable {
     }
 
     @Override
-    public void onSubscribe(Disposable s) {
-        DisposableHelper.setOnce(this.s, s);
+    public void onSubscribe(Disposable d) {
+        DisposableHelper.setOnce(this.upstream, d);
     }
 
     @Override
     public void onSuccess(T t) {
-        Disposable a = s.get();
+        Disposable a = upstream.get();
         if (a == DisposableHelper.DISPOSED) {
             return;
         }
         value = t;
-        s.compareAndSet(a, this);
+        upstream.compareAndSet(a, this);
         countDown();
     }
 
     @Override
     public void onError(Throwable t) {
         for (;;) {
-            Disposable a = s.get();
+            Disposable a = upstream.get();
             if (a == DisposableHelper.DISPOSED) {
                 RxJavaPlugins.onError(t);
                 return;
             }
             error = t;
-            if (s.compareAndSet(a, this)) {
+            if (upstream.compareAndSet(a, this)) {
                 countDown();
                 return;
             }

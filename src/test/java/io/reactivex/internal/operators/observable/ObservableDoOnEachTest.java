@@ -14,7 +14,6 @@
 package io.reactivex.internal.operators.observable;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
@@ -28,7 +27,7 @@ import io.reactivex.disposables.Disposables;
 import io.reactivex.exceptions.*;
 import io.reactivex.functions.*;
 import io.reactivex.internal.functions.Functions;
-import io.reactivex.internal.fuseable.QueueSubscription;
+import io.reactivex.internal.fuseable.QueueFuseable;
 import io.reactivex.observers.*;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.subjects.UnicastSubject;
@@ -201,7 +200,7 @@ public class ObservableDoOnEachTest {
 
     @Test
     public void onErrorThrows() {
-        TestObserver<Object> ts = TestObserver.create();
+        TestObserver<Object> to = TestObserver.create();
 
         Observable.error(new TestException())
         .doOnError(new Consumer<Throwable>() {
@@ -209,13 +208,13 @@ public class ObservableDoOnEachTest {
             public void accept(Throwable e) {
                 throw new TestException();
             }
-        }).subscribe(ts);
+        }).subscribe(to);
 
-        ts.assertNoValues();
-        ts.assertNotComplete();
-        ts.assertError(CompositeException.class);
+        to.assertNoValues();
+        to.assertNotComplete();
+        to.assertError(CompositeException.class);
 
-        CompositeException ex = (CompositeException)ts.errors().get(0);
+        CompositeException ex = (CompositeException)to.errors().get(0);
 
         List<Throwable> exceptions = ex.getExceptions();
         assertEquals(2, exceptions.size());
@@ -230,12 +229,12 @@ public class ObservableDoOnEachTest {
         try {
             Observable.wrap(new ObservableSource<Object>() {
                 @Override
-                public void subscribe(Observer<? super Object> s) {
-                    s.onSubscribe(Disposables.empty());
-                    s.onNext(1);
-                    s.onNext(2);
-                    s.onError(new IOException());
-                    s.onComplete();
+                public void subscribe(Observer<? super Object> observer) {
+                    observer.onSubscribe(Disposables.empty());
+                    observer.onNext(1);
+                    observer.onNext(2);
+                    observer.onError(new IOException());
+                    observer.onComplete();
                 }
             })
             .doOnNext(new Consumer<Object>() {
@@ -260,9 +259,9 @@ public class ObservableDoOnEachTest {
         try {
             Observable.wrap(new ObservableSource<Object>() {
                 @Override
-                public void subscribe(Observer<? super Object> s) {
-                    s.onSubscribe(Disposables.empty());
-                    s.onError(new TestException());
+                public void subscribe(Observer<? super Object> observer) {
+                    observer.onSubscribe(Disposables.empty());
+                    observer.onError(new TestException());
                 }
             })
             .doAfterTerminate(new Action() {
@@ -287,9 +286,9 @@ public class ObservableDoOnEachTest {
         try {
             Observable.wrap(new ObservableSource<Object>() {
                 @Override
-                public void subscribe(Observer<? super Object> s) {
-                    s.onSubscribe(Disposables.empty());
-                    s.onComplete();
+                public void subscribe(Observer<? super Object> observer) {
+                    observer.onSubscribe(Disposables.empty());
+                    observer.onComplete();
                 }
             })
             .doAfterTerminate(new Action() {
@@ -311,9 +310,9 @@ public class ObservableDoOnEachTest {
     public void onCompleteCrash() {
         Observable.wrap(new ObservableSource<Object>() {
             @Override
-            public void subscribe(Observer<? super Object> s) {
-                s.onSubscribe(Disposables.empty());
-                s.onComplete();
+            public void subscribe(Observer<? super Object> observer) {
+                observer.onSubscribe(Disposables.empty());
+                observer.onComplete();
             }
         })
         .doOnComplete(new Action() {
@@ -333,12 +332,12 @@ public class ObservableDoOnEachTest {
         try {
             Observable.wrap(new ObservableSource<Object>() {
                 @Override
-                public void subscribe(Observer<? super Object> s) {
-                    s.onSubscribe(Disposables.empty());
-                    s.onNext(1);
-                    s.onNext(2);
-                    s.onError(new IOException());
-                    s.onComplete();
+                public void subscribe(Observer<? super Object> observer) {
+                    observer.onSubscribe(Disposables.empty());
+                    observer.onNext(1);
+                    observer.onNext(2);
+                    observer.onError(new IOException());
+                    observer.onComplete();
                 }
             })
             .doOnNext(new Consumer<Object>() {
@@ -364,9 +363,9 @@ public class ObservableDoOnEachTest {
         try {
             Observable.wrap(new ObservableSource<Object>() {
                 @Override
-                public void subscribe(Observer<? super Object> s) {
-                    s.onSubscribe(Disposables.empty());
-                    s.onError(new TestException());
+                public void subscribe(Observer<? super Object> observer) {
+                    observer.onSubscribe(Disposables.empty());
+                    observer.onError(new TestException());
                 }
             })
             .doAfterTerminate(new Action() {
@@ -408,9 +407,9 @@ public class ObservableDoOnEachTest {
         try {
             Observable.wrap(new ObservableSource<Object>() {
                 @Override
-                public void subscribe(Observer<? super Object> s) {
-                    s.onSubscribe(Disposables.empty());
-                    s.onComplete();
+                public void subscribe(Observer<? super Object> observer) {
+                    observer.onSubscribe(Disposables.empty());
+                    observer.onComplete();
                 }
             })
             .doAfterTerminate(new Action() {
@@ -433,9 +432,9 @@ public class ObservableDoOnEachTest {
     public void onCompleteCrashConditional() {
         Observable.wrap(new ObservableSource<Object>() {
             @Override
-            public void subscribe(Observer<? super Object> s) {
-                s.onSubscribe(Disposables.empty());
-                s.onComplete();
+            public void subscribe(Observer<? super Object> observer) {
+                observer.onSubscribe(Disposables.empty());
+                observer.onComplete();
             }
         })
         .doOnComplete(new Action() {
@@ -451,7 +450,7 @@ public class ObservableDoOnEachTest {
 
     @Test
     public void onErrorOnErrorCrashConditional() {
-        TestObserver<Object> ts = Observable.error(new TestException("Outer"))
+        TestObserver<Object> to = Observable.error(new TestException("Outer"))
         .doOnError(new Consumer<Throwable>() {
             @Override
             public void accept(Throwable e) throws Exception {
@@ -462,7 +461,7 @@ public class ObservableDoOnEachTest {
         .test()
         .assertFailure(CompositeException.class);
 
-        List<Throwable> errors = TestHelper.compositeList(ts.errors().get(0));
+        List<Throwable> errors = TestHelper.compositeList(to.errors().get(0));
 
         TestHelper.assertError(errors, 0, TestException.class, "Outer");
         TestHelper.assertError(errors, 1, TestException.class, "Inner");
@@ -471,7 +470,7 @@ public class ObservableDoOnEachTest {
     @Test
     @Ignore("Fusion not supported yet") // TODO decide/implement fusion
     public void fused() {
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueSubscription.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -488,10 +487,10 @@ public class ObservableDoOnEachTest {
                 call[1]++;
             }
         })
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueSubscription.SYNC))
+        to.assertOf(ObserverFusion.<Integer>assertFuseable())
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.SYNC))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);
@@ -501,7 +500,7 @@ public class ObservableDoOnEachTest {
     @Test
     @Ignore("Fusion not supported yet") // TODO decide/implement fusion
     public void fusedOnErrorCrash() {
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueSubscription.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0 };
 
@@ -518,10 +517,10 @@ public class ObservableDoOnEachTest {
                 call[0]++;
             }
         })
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueSubscription.SYNC))
+        to.assertOf(ObserverFusion.<Integer>assertFuseable())
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.SYNC))
         .assertFailure(TestException.class);
 
         assertEquals(0, call[0]);
@@ -530,7 +529,7 @@ public class ObservableDoOnEachTest {
     @Test
     @Ignore("Fusion not supported yet") // TODO decide/implement fusion
     public void fusedConditional() {
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueSubscription.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -548,10 +547,10 @@ public class ObservableDoOnEachTest {
             }
         })
         .filter(Functions.alwaysTrue())
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueSubscription.SYNC))
+        to.assertOf(ObserverFusion.<Integer>assertFuseable())
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.SYNC))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);
@@ -561,7 +560,7 @@ public class ObservableDoOnEachTest {
     @Test
     @Ignore("Fusion not supported yet") // TODO decide/implement fusion
     public void fusedOnErrorCrashConditional() {
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueSubscription.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0 };
 
@@ -579,10 +578,10 @@ public class ObservableDoOnEachTest {
             }
         })
         .filter(Functions.alwaysTrue())
-        .subscribe(ts);
+        .subscribe(to);
 
-        ts.assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueSubscription.SYNC))
+        to.assertOf(ObserverFusion.<Integer>assertFuseable())
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.SYNC))
         .assertFailure(TestException.class);
 
         assertEquals(0, call[0]);
@@ -591,7 +590,7 @@ public class ObservableDoOnEachTest {
     @Test
     @Ignore("Fusion not supported yet") // TODO decide/implement fusion
     public void fusedAsync() {
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueSubscription.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -610,12 +609,12 @@ public class ObservableDoOnEachTest {
                 call[1]++;
             }
         })
-        .subscribe(ts);
+        .subscribe(to);
 
         TestHelper.emit(up, 1, 2, 3, 4, 5);
 
-        ts.assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueSubscription.ASYNC))
+        to.assertOf(ObserverFusion.<Integer>assertFuseable())
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);
@@ -625,7 +624,7 @@ public class ObservableDoOnEachTest {
     @Test
     @Ignore("Fusion not supported yet") // TODO decide/implement fusion
     public void fusedAsyncConditional() {
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueSubscription.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -645,12 +644,12 @@ public class ObservableDoOnEachTest {
             }
         })
         .filter(Functions.alwaysTrue())
-        .subscribe(ts);
+        .subscribe(to);
 
         TestHelper.emit(up, 1, 2, 3, 4, 5);
 
-        ts.assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueSubscription.ASYNC))
+        to.assertOf(ObserverFusion.<Integer>assertFuseable())
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);
@@ -660,7 +659,7 @@ public class ObservableDoOnEachTest {
     @Test
     @Ignore("Fusion not supported yet") // TODO decide/implement fusion
     public void fusedAsyncConditional2() {
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueSubscription.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -680,12 +679,12 @@ public class ObservableDoOnEachTest {
             }
         })
         .filter(Functions.alwaysTrue())
-        .subscribe(ts);
+        .subscribe(to);
 
         TestHelper.emit(up, 1, 2, 3, 4, 5);
 
-        ts.assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueSubscription.NONE))
+        to.assertOf(ObserverFusion.<Integer>assertFuseable())
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.NONE))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);

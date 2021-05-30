@@ -64,77 +64,76 @@ public final class MaybeAmb<T> extends Maybe<T> {
             count = sources.length;
         }
 
-        AmbMaybeObserver<T> parent = new AmbMaybeObserver<T>(observer);
-        observer.onSubscribe(parent);
+        CompositeDisposable set = new CompositeDisposable();
+        observer.onSubscribe(set);
+
+        AtomicBoolean winner = new AtomicBoolean();
 
         for (int i = 0; i < count; i++) {
             MaybeSource<? extends T> s = sources[i];
-            if (parent.isDisposed()) {
+            if (set.isDisposed()) {
                 return;
             }
 
             if (s == null) {
-                parent.onError(new NullPointerException("One of the MaybeSources is null"));
+                set.dispose();
+                NullPointerException ex = new NullPointerException("One of the MaybeSources is null");
+                if (winner.compareAndSet(false, true)) {
+                    observer.onError(ex);
+                } else {
+                    RxJavaPlugins.onError(ex);
+                }
                 return;
             }
 
-            s.subscribe(parent);
+            s.subscribe(new AmbMaybeObserver<T>(observer, set, winner));
         }
 
         if (count == 0) {
             observer.onComplete();
         }
-
     }
 
     static final class AmbMaybeObserver<T>
-    extends AtomicBoolean
-    implements MaybeObserver<T>, Disposable {
+    implements MaybeObserver<T> {
 
+        final MaybeObserver<? super T> downstream;
 
-        private static final long serialVersionUID = -7044685185359438206L;
-
-        final MaybeObserver<? super T> actual;
+        final AtomicBoolean winner;
 
         final CompositeDisposable set;
 
-        AmbMaybeObserver(MaybeObserver<? super T> actual) {
-            this.actual = actual;
-            this.set = new CompositeDisposable();
-        }
+        Disposable upstream;
 
-        @Override
-        public void dispose() {
-            if (compareAndSet(false, true)) {
-                set.dispose();
-            }
-        }
-
-        @Override
-        public boolean isDisposed() {
-            return get();
+        AmbMaybeObserver(MaybeObserver<? super T> downstream, CompositeDisposable set, AtomicBoolean winner) {
+            this.downstream = downstream;
+            this.set = set;
+            this.winner = winner;
         }
 
         @Override
         public void onSubscribe(Disposable d) {
+            upstream = d;
             set.add(d);
         }
 
         @Override
         public void onSuccess(T value) {
-            if (compareAndSet(false, true)) {
+            if (winner.compareAndSet(false, true)) {
+                set.delete(upstream);
                 set.dispose();
 
-                actual.onSuccess(value);
+                downstream.onSuccess(value);
             }
         }
 
         @Override
         public void onError(Throwable e) {
-            if (compareAndSet(false, true)) {
+            if (winner.compareAndSet(false, true)) {
+                set.delete(upstream);
                 set.dispose();
 
-                actual.onError(e);
+                downstream.onError(e);
             } else {
                 RxJavaPlugins.onError(e);
             }
@@ -142,12 +141,12 @@ public final class MaybeAmb<T> extends Maybe<T> {
 
         @Override
         public void onComplete() {
-            if (compareAndSet(false, true)) {
+            if (winner.compareAndSet(false, true)) {
+                set.delete(upstream);
                 set.dispose();
 
-                actual.onComplete();
+                downstream.onComplete();
             }
         }
-
     }
 }

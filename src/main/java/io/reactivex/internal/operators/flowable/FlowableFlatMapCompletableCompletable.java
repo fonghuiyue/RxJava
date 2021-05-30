@@ -65,7 +65,7 @@ public final class FlowableFlatMapCompletableCompletable<T> extends Completable 
     implements FlowableSubscriber<T>, Disposable {
         private static final long serialVersionUID = 8443155186132538303L;
 
-        final CompletableObserver actual;
+        final CompletableObserver downstream;
 
         final AtomicThrowable errors;
 
@@ -77,12 +77,14 @@ public final class FlowableFlatMapCompletableCompletable<T> extends Completable 
 
         final int maxConcurrency;
 
-        Subscription s;
+        Subscription upstream;
+
+        volatile boolean disposed;
 
         FlatMapCompletableMainSubscriber(CompletableObserver observer,
                 Function<? super T, ? extends CompletableSource> mapper, boolean delayErrors,
                 int maxConcurrency) {
-            this.actual = observer;
+            this.downstream = observer;
             this.mapper = mapper;
             this.delayErrors = delayErrors;
             this.errors = new AtomicThrowable();
@@ -93,10 +95,10 @@ public final class FlowableFlatMapCompletableCompletable<T> extends Completable 
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (SubscriptionHelper.validate(this.s, s)) {
-                this.s = s;
+            if (SubscriptionHelper.validate(this.upstream, s)) {
+                this.upstream = s;
 
-                actual.onSubscribe(this);
+                downstream.onSubscribe(this);
 
                 int m = maxConcurrency;
                 if (m == Integer.MAX_VALUE) {
@@ -115,7 +117,7 @@ public final class FlowableFlatMapCompletableCompletable<T> extends Completable 
                 cs = ObjectHelper.requireNonNull(mapper.apply(value), "The mapper returned a null CompletableSource");
             } catch (Throwable ex) {
                 Exceptions.throwIfFatal(ex);
-                s.cancel();
+                upstream.cancel();
                 onError(ex);
                 return;
             }
@@ -124,7 +126,7 @@ public final class FlowableFlatMapCompletableCompletable<T> extends Completable 
 
             InnerObserver inner = new InnerObserver();
 
-            if (set.add(inner)) {
+            if (!disposed && set.add(inner)) {
                 cs.subscribe(inner);
             }
         }
@@ -135,17 +137,17 @@ public final class FlowableFlatMapCompletableCompletable<T> extends Completable 
                 if (delayErrors) {
                     if (decrementAndGet() == 0) {
                         Throwable ex = errors.terminate();
-                        actual.onError(ex);
+                        downstream.onError(ex);
                     } else {
                         if (maxConcurrency != Integer.MAX_VALUE) {
-                            s.request(1);
+                            upstream.request(1);
                         }
                     }
                 } else {
                     dispose();
                     if (getAndSet(0) > 0) {
                         Throwable ex = errors.terminate();
-                        actual.onError(ex);
+                        downstream.onError(ex);
                     }
                 }
             } else {
@@ -158,20 +160,21 @@ public final class FlowableFlatMapCompletableCompletable<T> extends Completable 
             if (decrementAndGet() == 0) {
                 Throwable ex = errors.terminate();
                 if (ex != null) {
-                    actual.onError(ex);
+                    downstream.onError(ex);
                 } else {
-                    actual.onComplete();
+                    downstream.onComplete();
                 }
             } else {
                 if (maxConcurrency != Integer.MAX_VALUE) {
-                    s.request(1);
+                    upstream.request(1);
                 }
             }
         }
 
         @Override
         public void dispose() {
-            s.cancel();
+            disposed = true;
+            upstream.cancel();
             set.dispose();
         }
 

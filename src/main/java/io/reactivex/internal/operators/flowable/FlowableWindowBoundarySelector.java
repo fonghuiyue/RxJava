@@ -63,13 +63,15 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
         final int bufferSize;
         final CompositeDisposable resources;
 
-        Subscription s;
+        Subscription upstream;
 
         final AtomicReference<Disposable> boundary = new AtomicReference<Disposable>();
 
         final List<UnicastProcessor<T>> ws;
 
         final AtomicLong windows = new AtomicLong();
+
+        final AtomicBoolean stopWindows = new AtomicBoolean();
 
         WindowBoundaryMainSubscriber(Subscriber<? super Flowable<T>> actual,
                 Publisher<B> open, Function<? super B, ? extends Publisher<V>> close, int bufferSize) {
@@ -84,19 +86,18 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (SubscriptionHelper.validate(this.s, s)) {
-                this.s = s;
+            if (SubscriptionHelper.validate(this.upstream, s)) {
+                this.upstream = s;
 
-                actual.onSubscribe(this);
+                downstream.onSubscribe(this);
 
-                if (cancelled) {
+                if (stopWindows.get()) {
                     return;
                 }
 
                 OperatorWindowBoundaryOpenSubscriber<T, B> os = new OperatorWindowBoundaryOpenSubscriber<T, B>(this);
 
                 if (boundary.compareAndSet(null, os)) {
-                    windows.getAndIncrement();
                     s.request(Long.MAX_VALUE);
                     open.subscribe(os);
                 }
@@ -141,7 +142,7 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
                 resources.dispose();
             }
 
-            actual.onError(t);
+            downstream.onError(t);
         }
 
         @Override
@@ -159,15 +160,15 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
                 resources.dispose();
             }
 
-            actual.onComplete();
+            downstream.onComplete();
         }
 
         void error(Throwable t) {
-            s.cancel();
+            upstream.cancel();
             resources.dispose();
             DisposableHelper.dispose(boundary);
 
-            actual.onError(t);
+            downstream.onError(t);
         }
 
         @Override
@@ -177,7 +178,12 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
 
         @Override
         public void cancel() {
-            cancelled = true;
+            if (stopWindows.compareAndSet(false, true)) {
+                DisposableHelper.dispose(boundary);
+                if (windows.decrementAndGet() == 0) {
+                    upstream.cancel();
+                }
+            }
         }
 
         void dispose() {
@@ -187,7 +193,7 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
 
         void drainLoop() {
             final SimplePlainQueue<Object> q = queue;
-            final Subscriber<? super Flowable<T>> a = actual;
+            final Subscriber<? super Flowable<T>> a = downstream;
             final List<UnicastProcessor<T>> ws = this.ws;
             int missed = 1;
 
@@ -236,10 +242,9 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
                             continue;
                         }
 
-                        if (cancelled) {
+                        if (stopWindows.get()) {
                             continue;
                         }
-
 
                         w = UnicastProcessor.<T>create(bufferSize);
 
@@ -251,7 +256,7 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
                                 produced(1);
                             }
                         } else {
-                            cancelled = true;
+                            cancel();
                             a.onError(new MissingBackpressureException("Could not deliver new window due to lack of requests"));
                             continue;
                         }
@@ -261,7 +266,7 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
                         try {
                             p = ObjectHelper.requireNonNull(close.apply(wo.open), "The publisher supplied is null");
                         } catch (Throwable e) {
-                            cancelled = true;
+                            cancel();
                             a.onError(e);
                             continue;
                         }
@@ -323,36 +328,22 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
     static final class OperatorWindowBoundaryOpenSubscriber<T, B> extends DisposableSubscriber<B> {
         final WindowBoundaryMainSubscriber<T, B, ?> parent;
 
-        boolean done;
-
         OperatorWindowBoundaryOpenSubscriber(WindowBoundaryMainSubscriber<T, B, ?> parent) {
             this.parent = parent;
         }
 
         @Override
         public void onNext(B t) {
-            if (done) {
-                return;
-            }
             parent.open(t);
         }
 
         @Override
         public void onError(Throwable t) {
-            if (done) {
-                RxJavaPlugins.onError(t);
-                return;
-            }
-            done = true;
             parent.error(t);
         }
 
         @Override
         public void onComplete() {
-            if (done) {
-                return;
-            }
-            done = true;
             parent.onComplete();
         }
     }
@@ -370,12 +361,8 @@ public final class FlowableWindowBoundarySelector<T, B, V> extends AbstractFlowa
 
         @Override
         public void onNext(V t) {
-            if (done) {
-                return;
-            }
-            done = true;
             cancel();
-            parent.close(this);
+            onComplete();
         }
 
         @Override

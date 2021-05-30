@@ -32,7 +32,7 @@ public final class SingleAmb<T> extends Single<T> {
 
     @Override
     @SuppressWarnings("unchecked")
-    protected void subscribeActual(final SingleObserver<? super T> s) {
+    protected void subscribeActual(final SingleObserver<? super T> observer) {
         SingleSource<? extends T>[] sources = this.sources;
         int count = 0;
         if (sources == null) {
@@ -40,7 +40,7 @@ public final class SingleAmb<T> extends Single<T> {
             try {
                 for (SingleSource<? extends T> element : sourcesIterable) {
                     if (element == null) {
-                        EmptyDisposable.error(new NullPointerException("One of the sources is null"), s);
+                        EmptyDisposable.error(new NullPointerException("One of the sources is null"), observer);
                         return;
                     }
                     if (count == sources.length) {
@@ -52,70 +52,76 @@ public final class SingleAmb<T> extends Single<T> {
                 }
             } catch (Throwable e) {
                 Exceptions.throwIfFatal(e);
-                EmptyDisposable.error(e, s);
+                EmptyDisposable.error(e, observer);
                 return;
             }
         } else {
             count = sources.length;
         }
 
+        final AtomicBoolean winner = new AtomicBoolean();
         final CompositeDisposable set = new CompositeDisposable();
 
-        AmbSingleObserver<T> shared = new AmbSingleObserver<T>(s, set);
-        s.onSubscribe(set);
+        observer.onSubscribe(set);
 
         for (int i = 0; i < count; i++) {
             SingleSource<? extends T> s1 = sources[i];
-            if (shared.get()) {
+            if (set.isDisposed()) {
                 return;
             }
 
             if (s1 == null) {
                 set.dispose();
                 Throwable e = new NullPointerException("One of the sources is null");
-                if (shared.compareAndSet(false, true)) {
-                    s.onError(e);
+                if (winner.compareAndSet(false, true)) {
+                    observer.onError(e);
                 } else {
                     RxJavaPlugins.onError(e);
                 }
                 return;
             }
 
-            s1.subscribe(shared);
+            s1.subscribe(new AmbSingleObserver<T>(observer, set, winner));
         }
     }
 
-    static final class AmbSingleObserver<T> extends AtomicBoolean implements SingleObserver<T> {
-
-        private static final long serialVersionUID = -1944085461036028108L;
+    static final class AmbSingleObserver<T> implements SingleObserver<T> {
 
         final CompositeDisposable set;
 
-        final SingleObserver<? super T> s;
+        final SingleObserver<? super T> downstream;
 
-        AmbSingleObserver(SingleObserver<? super T> s, CompositeDisposable set) {
-            this.s = s;
+        final AtomicBoolean winner;
+
+        Disposable upstream;
+
+        AmbSingleObserver(SingleObserver<? super T> observer, CompositeDisposable set, AtomicBoolean winner) {
+            this.downstream = observer;
             this.set = set;
+            this.winner = winner;
         }
 
         @Override
         public void onSubscribe(Disposable d) {
+            this.upstream = d;
             set.add(d);
         }
 
         @Override
         public void onSuccess(T value) {
-            if (compareAndSet(false, true)) {
+            if (winner.compareAndSet(false, true)) {
+                set.delete(upstream);
                 set.dispose();
-                s.onSuccess(value);
+                downstream.onSuccess(value);
             }
         }
 
         @Override
         public void onError(Throwable e) {
-            if (compareAndSet(false, true)) {
+            if (winner.compareAndSet(false, true)) {
+                set.delete(upstream);
                 set.dispose();
-                s.onError(e);
+                downstream.onError(e);
             } else {
                 RxJavaPlugins.onError(e);
             }

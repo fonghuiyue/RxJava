@@ -28,9 +28,13 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.exceptions.TestException;
 import io.reactivex.functions.*;
 import io.reactivex.observers.*;
-import io.reactivex.schedulers.Schedulers;
 
-public class PublishSubjectTest {
+public class PublishSubjectTest extends SubjectTest<Integer> {
+
+    @Override
+    protected Subject<Integer> create() {
+        return PublishSubject.create();
+    }
 
     @Test
     public void testCompleted() {
@@ -62,9 +66,9 @@ public class PublishSubjectTest {
         Observer<Object> observerB = TestHelper.mockObserver();
         Observer<Object> observerC = TestHelper.mockObserver();
 
-        TestObserver<Object> ts = new TestObserver<Object>(observerA);
+        TestObserver<Object> to = new TestObserver<Object>(observerA);
 
-        channel.subscribe(ts);
+        channel.subscribe(to);
         channel.subscribe(observerB);
 
         InOrder inOrderA = inOrder(observerA);
@@ -76,7 +80,7 @@ public class PublishSubjectTest {
         inOrderA.verify(observerA).onNext(42);
         inOrderB.verify(observerB).onNext(42);
 
-        ts.dispose();
+        to.dispose();
         inOrderA.verifyNoMoreInteractions();
 
         channel.onNext(4711);
@@ -171,13 +175,13 @@ public class PublishSubjectTest {
         PublishSubject<String> subject = PublishSubject.create();
 
         Observer<String> observer = TestHelper.mockObserver();
-        TestObserver<String> ts = new TestObserver<String>(observer);
-        subject.subscribe(ts);
+        TestObserver<String> to = new TestObserver<String>(observer);
+        subject.subscribe(to);
 
         subject.onNext("one");
         subject.onNext("two");
 
-        ts.dispose();
+        to.dispose();
         assertObservedUntilTwo(observer);
 
         Observer<String> anotherSubscriber = TestHelper.mockObserver();
@@ -257,8 +261,8 @@ public class PublishSubjectTest {
         final PublishSubject<Integer> ps = PublishSubject.create();
 
         Observer<Integer> o1 = TestHelper.mockObserver();
-        TestObserver<Integer> ts = new TestObserver<Integer>(o1);
-        ps.subscribe(ts);
+        TestObserver<Integer> to = new TestObserver<Integer>(o1);
+        ps.subscribe(to);
 
         // emit
         ps.onNext(1);
@@ -269,14 +273,14 @@ public class PublishSubjectTest {
         inOrder1.verifyNoMoreInteractions();
 
         // unsubscribe
-        ts.dispose();
+        to.dispose();
 
         // emit again but nothing will be there to receive it
         ps.onNext(2);
 
         Observer<Integer> o2 = TestHelper.mockObserver();
-        TestObserver<Integer> ts2 = new TestObserver<Integer>(o2);
-        ps.subscribe(ts2);
+        TestObserver<Integer> to2 = new TestObserver<Integer>(o2);
+        ps.subscribe(to2);
 
         // emit
         ps.onNext(3);
@@ -286,7 +290,7 @@ public class PublishSubjectTest {
         inOrder2.verify(o2, times(1)).onNext(3);
         inOrder2.verifyNoMoreInteractions();
 
-        ts2.dispose();
+        to2.dispose();
     }
 
     private final Throwable testException = new Throwable();
@@ -333,15 +337,14 @@ public class PublishSubjectTest {
         }
     }
 
-
     // FIXME RS subscribers are not allowed to throw
 //    @Test
 //    public void testOnErrorThrowsDoesntPreventDelivery() {
 //        PublishSubject<String> ps = PublishSubject.create();
 //
 //        ps.subscribe();
-//        TestObserver<String> ts = new TestObserver<String>();
-//        ps.subscribe(ts);
+//        TestObserver<String> to = new TestObserver<String>();
+//        ps.subscribe(to);
 //
 //        try {
 //            ps.onError(new RuntimeException("an exception"));
@@ -350,7 +353,7 @@ public class PublishSubjectTest {
 //            // ignore
 //        }
 //        // even though the onError above throws we should still receive it on the other subscriber
-//        assertEquals(1, ts.getOnErrorEvents().size());
+//        assertEquals(1, to.getOnErrorEvents().size());
 //    }
 
     // FIXME RS subscribers are not allowed to throw
@@ -363,8 +366,8 @@ public class PublishSubjectTest {
 //
 //        ps.subscribe();
 //        ps.subscribe();
-//        TestObserver<String> ts = new TestObserver<String>();
-//        ps.subscribe(ts);
+//        TestObserver<String> to = new TestObserver<String>();
+//        ps.subscribe(to);
 //        ps.subscribe();
 //        ps.subscribe();
 //        ps.subscribe();
@@ -377,8 +380,9 @@ public class PublishSubjectTest {
 //            assertEquals(5, e.getExceptions().size());
 //        }
 //        // even though the onError above throws we should still receive it on the other subscriber
-//        assertEquals(1, ts.getOnErrorEvents().size());
+//        assertEquals(1, to.getOnErrorEvents().size());
 //    }
+
     @Test
     public void testCurrentStateMethodsNormal() {
         PublishSubject<Object> as = PublishSubject.create();
@@ -414,6 +418,7 @@ public class PublishSubjectTest {
         assertTrue(as.hasComplete());
         assertNull(as.getThrowable());
     }
+
     @Test
     public void testCurrentStateMethodsError() {
         PublishSubject<Object> as = PublishSubject.create();
@@ -437,83 +442,83 @@ public class PublishSubjectTest {
 
     @Test
     public void crossCancel() {
-        final TestObserver<Integer> ts1 = new TestObserver<Integer>();
-        TestObserver<Integer> ts2 = new TestObserver<Integer>() {
+        final TestObserver<Integer> to1 = new TestObserver<Integer>();
+        TestObserver<Integer> to2 = new TestObserver<Integer>() {
             @Override
             public void onNext(Integer t) {
                 super.onNext(t);
-                ts1.cancel();
+                to1.cancel();
             }
         };
 
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        pp.subscribe(ts2);
-        pp.subscribe(ts1);
+        ps.subscribe(to2);
+        ps.subscribe(to1);
 
-        pp.onNext(1);
+        ps.onNext(1);
 
-        ts2.assertValue(1);
+        to2.assertValue(1);
 
-        ts1.assertNoValues();
+        to1.assertNoValues();
     }
 
     @Test
     public void crossCancelOnError() {
-        final TestObserver<Integer> ts1 = new TestObserver<Integer>();
-        TestObserver<Integer> ts2 = new TestObserver<Integer>() {
+        final TestObserver<Integer> to1 = new TestObserver<Integer>();
+        TestObserver<Integer> to2 = new TestObserver<Integer>() {
             @Override
             public void onError(Throwable t) {
                 super.onError(t);
-                ts1.cancel();
+                to1.cancel();
             }
         };
 
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        pp.subscribe(ts2);
-        pp.subscribe(ts1);
+        ps.subscribe(to2);
+        ps.subscribe(to1);
 
-        pp.onError(new TestException());
+        ps.onError(new TestException());
 
-        ts2.assertError(TestException.class);
+        to2.assertError(TestException.class);
 
-        ts1.assertNoErrors();
+        to1.assertNoErrors();
     }
 
     @Test
     public void crossCancelOnComplete() {
-        final TestObserver<Integer> ts1 = new TestObserver<Integer>();
-        TestObserver<Integer> ts2 = new TestObserver<Integer>() {
+        final TestObserver<Integer> to1 = new TestObserver<Integer>();
+        TestObserver<Integer> to2 = new TestObserver<Integer>() {
             @Override
             public void onComplete() {
                 super.onComplete();
-                ts1.cancel();
+                to1.cancel();
             }
         };
 
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        pp.subscribe(ts2);
-        pp.subscribe(ts1);
+        ps.subscribe(to2);
+        ps.subscribe(to1);
 
-        pp.onComplete();
+        ps.onComplete();
 
-        ts2.assertComplete();
+        to2.assertComplete();
 
-        ts1.assertNotComplete();
+        to1.assertNotComplete();
     }
 
     @Test
     @Ignore("Observable doesn't do backpressure")
     public void backpressureOverflow() {
-//        PublishSubject<Integer> pp = PublishSubject.create();
+//        PublishSubject<Integer> ps = PublishSubject.create();
 //
-//        TestObserver<Integer> ts = pp.test(0L);
+//        TestObserver<Integer> to = ps.test(0L);
 //
-//        pp.onNext(1);
+//        ps.onNext(1);
 //
-//        ts.assertNoValues()
+//        to.assertNoValues()
 //        .assertNotComplete()
 //        .assertError(MissingBackpressureException.class)
 //        ;
@@ -521,16 +526,16 @@ public class PublishSubjectTest {
 
     @Test
     public void onSubscribeCancelsImmediately() {
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        TestObserver<Integer> ts = pp.test();
+        TestObserver<Integer> to = ps.test();
 
-        pp.subscribe(new Observer<Integer>() {
+        ps.subscribe(new Observer<Integer>() {
 
             @Override
-            public void onSubscribe(Disposable s) {
-                s.dispose();
-                s.dispose();
+            public void onSubscribe(Disposable d) {
+                d.dispose();
+                d.dispose();
             }
 
             @Override
@@ -550,29 +555,29 @@ public class PublishSubjectTest {
 
         });
 
-        ts.cancel();
+        to.cancel();
 
-        assertFalse(pp.hasObservers());
+        assertFalse(ps.hasObservers());
     }
 
     @Test
     public void terminateRace() throws Exception {
 
-        for (int i = 0; i < 100; i++) {
-            final PublishSubject<Integer> pp = PublishSubject.create();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final PublishSubject<Integer> ps = PublishSubject.create();
 
-            TestObserver<Integer> ts = pp.test();
+            TestObserver<Integer> to = ps.test();
 
             Runnable task = new Runnable() {
                 @Override
                 public void run() {
-                    pp.onComplete();
+                    ps.onComplete();
                 }
             };
 
-            TestHelper.race(task, task, Schedulers.io());
+            TestHelper.race(task, task);
 
-            ts
+            to
             .awaitDone(5, TimeUnit.SECONDS)
             .assertResult();
         }
@@ -581,153 +586,105 @@ public class PublishSubjectTest {
     @Test
     public void addRemoveRance() throws Exception {
 
-        for (int i = 0; i < 100; i++) {
-            final PublishSubject<Integer> pp = PublishSubject.create();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final PublishSubject<Integer> ps = PublishSubject.create();
 
-            final TestObserver<Integer> ts = pp.test();
+            final TestObserver<Integer> to = ps.test();
 
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    pp.subscribe();
+                    ps.subscribe();
                 }
             };
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    ts.cancel();
+                    to.cancel();
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.io());
+            TestHelper.race(r1, r2);
         }
     }
 
     @Test
     public void addTerminateRance() throws Exception {
 
-        for (int i = 0; i < 100; i++) {
-            final PublishSubject<Integer> pp = PublishSubject.create();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final PublishSubject<Integer> ps = PublishSubject.create();
 
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    pp.subscribe();
+                    ps.subscribe();
                 }
             };
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    pp.onComplete();
+                    ps.onComplete();
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.io());
+            TestHelper.race(r1, r2);
         }
     }
 
     @Test
     public void addCompleteRance() throws Exception {
 
-        for (int i = 0; i < 100; i++) {
-            final PublishSubject<Integer> pp = PublishSubject.create();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final PublishSubject<Integer> ps = PublishSubject.create();
 
-            final TestObserver<Integer> ts = new TestObserver<Integer>();
+            final TestObserver<Integer> to = new TestObserver<Integer>();
 
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    pp.subscribe(ts);
+                    ps.subscribe(to);
                 }
             };
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    pp.onComplete();
+                    ps.onComplete();
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.io());
+            TestHelper.race(r1, r2);
 
-            ts.awaitDone(5, TimeUnit.SECONDS)
+            to.awaitDone(5, TimeUnit.SECONDS)
             .assertResult();
         }
     }
 
     @Test
     public void subscribeToAfterComplete() {
-        PublishSubject<Integer> pp = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
 
-        pp.onComplete();
+        ps.onComplete();
 
-        PublishSubject<Integer> pp2 = PublishSubject.create();
+        PublishSubject<Integer> ps2 = PublishSubject.create();
 
-        pp2.subscribe(pp);
+        ps2.subscribe(ps);
 
-        assertFalse(pp2.hasObservers());
-    }
-
-    @Test
-    public void nullOnNext() {
-        PublishSubject<Integer> pp = PublishSubject.create();
-
-        TestObserver<Integer> ts = pp.test();
-
-        assertTrue(pp.hasObservers());
-
-        pp.onNext(null);
-
-        ts.assertFailure(NullPointerException.class);
-    }
-
-    @Test
-    public void nullOnError() {
-        PublishSubject<Integer> pp = PublishSubject.create();
-
-        TestObserver<Integer> ts = pp.test();
-
-        pp.onError(null);
-
-        ts.assertFailure(NullPointerException.class);
+        assertFalse(ps2.hasObservers());
     }
 
     @Test
     public void subscribedTo() {
-        PublishSubject<Integer> pp = PublishSubject.create();
-        PublishSubject<Integer> pp2 = PublishSubject.create();
+        PublishSubject<Integer> ps = PublishSubject.create();
+        PublishSubject<Integer> ps2 = PublishSubject.create();
 
-        pp.subscribe(pp2);
+        ps.subscribe(ps2);
 
-        TestObserver<Integer> ts = pp2.test();
+        TestObserver<Integer> to = ps2.test();
 
-        pp.onNext(1);
-        pp.onNext(2);
-        pp.onComplete();
+        ps.onNext(1);
+        ps.onNext(2);
+        ps.onComplete();
 
-        ts.assertResult(1, 2);
-    }
-
-    @Test
-    public void onNextNull() {
-        final PublishSubject<Object> s = PublishSubject.create();
-
-        s.onNext(null);
-
-        s.test()
-            .assertNoValues()
-            .assertError(NullPointerException.class)
-            .assertErrorMessage("onNext called with null. Null values are generally not allowed in 2.x operators and sources.");
-    }
-
-    @Test
-    public void onErrorNull() {
-        final PublishSubject<Object> s = PublishSubject.create();
-
-        s.onError(null);
-
-        s.test()
-            .assertNoValues()
-            .assertError(NullPointerException.class)
-            .assertErrorMessage("onError called with null. Null values are generally not allowed in 2.x operators and sources.");
+        to.assertResult(1, 2);
     }
 }

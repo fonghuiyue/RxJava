@@ -24,7 +24,6 @@ import io.reactivex.*;
 import io.reactivex.disposables.*;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
-import io.reactivex.schedulers.Schedulers;
 
 public class SingleSubjectTest {
 
@@ -131,22 +130,28 @@ public class SingleSubjectTest {
     public void nullValue() {
         SingleSubject<Integer> ss = SingleSubject.create();
 
-        TestObserver<Integer> to = ss.test();
+        try {
+            ss.onSuccess(null);
+            fail("No NullPointerException thrown");
+        } catch (NullPointerException ex) {
+            assertEquals("onSuccess called with null. Null values are generally not allowed in 2.x operators and sources.", ex.getMessage());
+        }
 
-        ss.onSuccess(null);
-
-        to.assertFailure(NullPointerException.class);
+        ss.test().assertEmpty().cancel();
     }
 
     @Test
     public void nullThrowable() {
         SingleSubject<Integer> ss = SingleSubject.create();
 
-        TestObserver<Integer> to = ss.test();
+        try {
+            ss.onError(null);
+            fail("No NullPointerException thrown");
+        } catch (NullPointerException ex) {
+            assertEquals("onError called with null. Null values are generally not allowed in 2.x operators and sources.", ex.getMessage());
+        }
 
-        ss.onError(null);
-
-        to.assertFailure(NullPointerException.class);
+        ss.test().assertEmpty().cancel();
     }
 
     @Test
@@ -219,7 +224,7 @@ public class SingleSubjectTest {
 
     @Test
     public void addRemoveRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final SingleSubject<Integer> ss = SingleSubject.create();
 
             final TestObserver<Integer> to = ss.test();
@@ -237,7 +242,7 @@ public class SingleSubjectTest {
                     to.cancel();
                 }
             };
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 }

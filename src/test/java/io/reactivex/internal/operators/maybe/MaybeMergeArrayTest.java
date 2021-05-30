@@ -18,15 +18,14 @@ import static org.junit.Assert.*;
 import java.util.*;
 
 import org.junit.Test;
-import org.reactivestreams.*;
+import org.reactivestreams.Subscription;
 
 import io.reactivex.*;
 import io.reactivex.disposables.Disposables;
 import io.reactivex.exceptions.TestException;
-import io.reactivex.internal.fuseable.QueueSubscription;
+import io.reactivex.internal.fuseable.*;
 import io.reactivex.internal.operators.maybe.MaybeMergeArray.MergeMaybeObserver;
 import io.reactivex.plugins.RxJavaPlugins;
-import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subjects.PublishSubject;
 import io.reactivex.subscribers.*;
 
@@ -35,26 +34,26 @@ public class MaybeMergeArrayTest {
     @SuppressWarnings("unchecked")
     @Test
     public void normal() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.SYNC);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.SYNC);
 
         Maybe.mergeArray(Maybe.just(1), Maybe.just(2))
         .subscribe(ts);
         ts
         .assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.NONE))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.NONE))
         .assertResult(1, 2);
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void fusedPollMixed() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         Maybe.mergeArray(Maybe.just(1), Maybe.<Integer>empty(), Maybe.just(2))
         .subscribe(ts);
         ts
         .assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.ASYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult(1, 2);
     }
 
@@ -63,23 +62,23 @@ public class MaybeMergeArrayTest {
     public void fusedEmptyCheck() {
         Maybe.mergeArray(Maybe.just(1), Maybe.<Integer>empty(), Maybe.just(2))
         .subscribe(new FlowableSubscriber<Integer>() {
-            QueueSubscription<Integer> qd;
+            QueueSubscription<Integer> qs;
             @Override
-            public void onSubscribe(Subscription d) {
-                qd = (QueueSubscription<Integer>)d;
+            public void onSubscribe(Subscription s) {
+                qs = (QueueSubscription<Integer>)s;
 
-                assertEquals(QueueSubscription.ASYNC, qd.requestFusion(QueueSubscription.ANY));
+                assertEquals(QueueFuseable.ASYNC, qs.requestFusion(QueueFuseable.ANY));
             }
 
             @Override
             public void onNext(Integer value) {
-                assertFalse(qd.isEmpty());
+                assertFalse(qs.isEmpty());
 
-                qd.clear();
+                qs.clear();
 
-                assertTrue(qd.isEmpty());
+                assertTrue(qs.isEmpty());
 
-                qd.cancel();
+                qs.cancel();
             }
 
             @Override
@@ -120,20 +119,20 @@ public class MaybeMergeArrayTest {
     @SuppressWarnings("unchecked")
     @Test
     public void errorFused() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         Maybe.mergeArray(Maybe.<Integer>error(new TestException()), Maybe.just(2))
         .subscribe(ts);
         ts
         .assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.ASYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertFailure(TestException.class);
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void errorRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             List<Throwable> errors = TestHelper.trackPluginErrors();
 
             try {
@@ -159,7 +158,7 @@ public class MaybeMergeArrayTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
                 ts.assertFailure(Throwable.class);
 

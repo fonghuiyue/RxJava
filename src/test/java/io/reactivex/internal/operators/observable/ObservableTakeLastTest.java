@@ -14,7 +14,6 @@
 package io.reactivex.internal.operators.observable;
 
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -103,23 +102,23 @@ public class ObservableTakeLastTest {
 
     @Test
     public void testBackpressure1() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
         Observable.range(1, 100000).takeLast(1)
         .observeOn(Schedulers.newThread())
-        .map(newSlowProcessor()).subscribe(ts);
-        ts.awaitTerminalEvent();
-        ts.assertNoErrors();
-        ts.assertValue(100000);
+        .map(newSlowProcessor()).subscribe(to);
+        to.awaitTerminalEvent();
+        to.assertNoErrors();
+        to.assertValue(100000);
     }
 
     @Test
     public void testBackpressure2() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
         Observable.range(1, 100000).takeLast(Flowable.bufferSize() * 4)
-        .observeOn(Schedulers.newThread()).map(newSlowProcessor()).subscribe(ts);
-        ts.awaitTerminalEvent();
-        ts.assertNoErrors();
-        assertEquals(Flowable.bufferSize() * 4, ts.valueCount());
+        .observeOn(Schedulers.newThread()).map(newSlowProcessor()).subscribe(to);
+        to.awaitTerminalEvent();
+        to.assertNoErrors();
+        assertEquals(Flowable.bufferSize() * 4, to.valueCount());
     }
 
     private Function<Integer, Integer> newSlowProcessor() {
@@ -179,7 +178,7 @@ public class ObservableTakeLastTest {
                 cancel();
             }
         });
-        assertEquals(1,count.get());
+        assertEquals(1, count.get());
     }
 
     @Test

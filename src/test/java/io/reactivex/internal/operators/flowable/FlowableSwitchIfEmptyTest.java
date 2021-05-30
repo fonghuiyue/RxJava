@@ -29,13 +29,12 @@ import io.reactivex.internal.subscriptions.BooleanSubscription;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subscribers.*;
 
-
 public class FlowableSwitchIfEmptyTest {
 
     @Test
     public void testSwitchWhenNotEmpty() throws Exception {
         final AtomicBoolean subscribed = new AtomicBoolean(false);
-        final Flowable<Integer> observable = Flowable.just(4)
+        final Flowable<Integer> flowable = Flowable.just(4)
                 .switchIfEmpty(Flowable.just(2)
                 .doOnSubscribe(new Consumer<Subscription>() {
                     @Override
@@ -44,16 +43,16 @@ public class FlowableSwitchIfEmptyTest {
                     }
                 }));
 
-        assertEquals(4, observable.blockingSingle().intValue());
+        assertEquals(4, flowable.blockingSingle().intValue());
         assertFalse(subscribed.get());
     }
 
     @Test
     public void testSwitchWhenEmpty() throws Exception {
-        final Flowable<Integer> observable = Flowable.<Integer>empty()
+        final Flowable<Integer> flowable = Flowable.<Integer>empty()
                 .switchIfEmpty(Flowable.fromIterable(Arrays.asList(42)));
 
-        assertEquals(42, observable.blockingSingle().intValue());
+        assertEquals(42, flowable.blockingSingle().intValue());
     }
 
     @Test
@@ -80,8 +79,8 @@ public class FlowableSwitchIfEmptyTest {
             }
         });
 
-        final Flowable<Long> observable = Flowable.<Long>empty().switchIfEmpty(withProducer);
-        assertEquals(42, observable.blockingSingle().intValue());
+        final Flowable<Long> flowable = Flowable.<Long>empty().switchIfEmpty(withProducer);
+        assertEquals(42, flowable.blockingSingle().intValue());
     }
 
     @Test
@@ -122,14 +121,13 @@ public class FlowableSwitchIfEmptyTest {
             }
         }).subscribe();
 
-
         assertTrue(bs.isCancelled());
         // FIXME no longer assertable
 //        assertTrue(sub.isUnsubscribed());
     }
 
     @Test
-    public void testSwitchShouldTriggerUnsubscribe() {
+    public void testSwitchShouldNotTriggerUnsubscribe() {
         final BooleanSubscription bs = new BooleanSubscription();
 
         Flowable.unsafeCreate(new Publisher<Long>() {
@@ -139,7 +137,7 @@ public class FlowableSwitchIfEmptyTest {
                 subscriber.onComplete();
             }
         }).switchIfEmpty(Flowable.<Long>never()).subscribe();
-        assertTrue(bs.isCancelled());
+        assertFalse(bs.isCancelled());
     }
 
     @Test
@@ -156,6 +154,7 @@ public class FlowableSwitchIfEmptyTest {
         ts.request(1);
         ts.assertValueCount(3);
     }
+
     @Test
     public void testBackpressureNoRequest() {
         TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
@@ -167,7 +166,7 @@ public class FlowableSwitchIfEmptyTest {
     @Test
     public void testBackpressureOnFirstObservable() {
         TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
-        Flowable.just(1,2,3).switchIfEmpty(Flowable.just(4, 5, 6)).subscribe(ts);
+        Flowable.just(1, 2, 3).switchIfEmpty(Flowable.just(4, 5, 6)).subscribe(ts);
         ts.assertNotComplete();
         ts.assertNoErrors();
         ts.assertNoValues();

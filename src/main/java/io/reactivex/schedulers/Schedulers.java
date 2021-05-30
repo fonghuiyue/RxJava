@@ -13,12 +13,12 @@
 
 package io.reactivex.schedulers;
 
+import java.util.concurrent.*;
+
 import io.reactivex.Scheduler;
-import io.reactivex.annotations.NonNull;
+import io.reactivex.annotations.*;
 import io.reactivex.internal.schedulers.*;
 import io.reactivex.plugins.RxJavaPlugins;
-
-import java.util.concurrent.*;
 
 /**
  * Static factory methods for returning standard Scheduler instances.
@@ -29,13 +29,18 @@ import java.util.concurrent.*;
  * <p>
  * <strong>Supported system properties ({@code System.getProperty()}):</strong>
  * <ul>
+ * <li>{@code rx2.io-keep-alive-time} (long): sets the keep-alive time of the {@link #io()} Scheduler workers, default is {@link IoScheduler#KEEP_ALIVE_TIME_DEFAULT}</li>
  * <li>{@code rx2.io-priority} (int): sets the thread priority of the {@link #io()} Scheduler, default is {@link Thread#NORM_PRIORITY}</li>
+ * <li>{@code rx2.io-scheduled-release} (boolean): {@code true} sets the worker release mode of the
+ * {@link #io()} Scheduler to <em>scheduled</em>, default is {@code false} for <em>eager</em> mode.</li>
  * <li>{@code rx2.computation-threads} (int): sets the number of threads in the {@link #computation()} Scheduler, default is the number of available CPUs</li>
  * <li>{@code rx2.computation-priority} (int): sets the thread priority of the {@link #computation()} Scheduler, default is {@link Thread#NORM_PRIORITY}</li>
  * <li>{@code rx2.newthread-priority} (int): sets the thread priority of the {@link #newThread()} Scheduler, default is {@link Thread#NORM_PRIORITY}</li>
  * <li>{@code rx2.single-priority} (int): sets the thread priority of the {@link #single()} Scheduler, default is {@link Thread#NORM_PRIORITY}</li>
  * <li>{@code rx2.purge-enabled} (boolean): enables periodic purging of all Scheduler's backing thread pools, default is false</li>
  * <li>{@code rx2.purge-period-seconds} (int): specifies the periodic purge interval of all Scheduler's backing thread pools, default is 1 second</li>
+ * <li>{@code rx2.scheduler.use-nanotime} (boolean): {@code true} instructs {@code Scheduler} to use {@link System#nanoTime()} for {@link Scheduler#now(TimeUnit)},
+ * instead of default {@link System#currentTimeMillis()} ({@code false})</li>
  * </ul>
  */
 public final class Schedulers {
@@ -112,6 +117,8 @@ public final class Schedulers {
      * <ul>
      * <li>{@code rx2.computation-threads} (int): sets the number of threads in the {@link #computation()} Scheduler, default is the number of available CPUs</li>
      * <li>{@code rx2.computation-priority} (int): sets the thread priority of the {@link #computation()} Scheduler, default is {@link Thread#NORM_PRIORITY}</li>
+     * <li>{@code rx2.io-scheduled-release} (boolean): {@code true} sets the worker release mode of the
+     * {@code #io()} Scheduler to <em>scheduled</em>, default is {@code false} for <em>eager</em> mode.</li>
      * </ul>
      * <p>
      * The default value of this scheduler can be overridden at initialization time via the
@@ -128,6 +135,21 @@ public final class Schedulers {
      * <p>Operators on the base reactive classes that use this scheduler are marked with the
      * &#64;{@link io.reactivex.annotations.SchedulerSupport SchedulerSupport}({@link io.reactivex.annotations.SchedulerSupport#COMPUTATION COMPUTATION})
      * annotation.
+     * <p>
+     * When the {@link Scheduler.Worker} is disposed, the underlying worker can be released to the cached worker pool in two modes:
+     * <ul>
+     * <li>In <em>eager</em> mode (default), the underlying worker is returned immediately to the cached worker pool
+     *  and can be reused much quicker by operators. The drawback is that if the currently running task doesn't
+     * respond to interruption in time or at all, this may lead to delays or deadlock with the reuse use of the
+     * underlying worker.
+     * </li>
+     * <li>In <em>scheduled</em> mode (enabled via the system parameter {@code rx2.io-scheduled-release}
+     * set to {@code true}), the underlying worker is returned to the cached worker pool only after the currently running task
+     * has finished. This can help prevent premature reuse of the underlying worker and likely won't lead to delays or
+     * deadlock with such reuses. The drawback is that the delay in release may lead to an excess amount of underlying
+     * workers being created.
+     * </li>
+     * </ul>
      * @return a {@link Scheduler} meant for computation-bound work
      */
     @NonNull
@@ -140,10 +162,10 @@ public final class Schedulers {
      * <p>
      * This can be used for asynchronously performing blocking IO.
      * <p>
-     * The implementation is backed by a pool of single-threaded {link ScheduledExecutorService} instances
-     * that will try to reuse previoulsy started instances used by the worker
+     * The implementation is backed by a pool of single-threaded {@link ScheduledExecutorService} instances
+     * that will try to reuse previously started instances used by the worker
      * returned by {@link io.reactivex.Scheduler#createWorker()} but otherwise will start a new backing
-     * {link ScheduledExecutorService} instance. Note that this scheduler may create an unbounded number
+     * {@link ScheduledExecutorService} instance. Note that this scheduler may create an unbounded number
      * of worker threads that can result in system slowdowns or {@code OutOfMemoryError}. Therefore, for casual uses
      * or when implementing an operator, the Worker instances must be disposed via {@link io.reactivex.Scheduler.Worker#dispose()}.
      * <p>
@@ -155,6 +177,7 @@ public final class Schedulers {
      * before the {@link Schedulers} class is referenced in your code.
      * <p><strong>Supported system properties ({@code System.getProperty()}):</strong>
      * <ul>
+     * <li>{@code rx2.io-keep-alive-time} (long): sets the keep-alive time of the {@link #io()} Scheduler workers, default is {@link IoScheduler#KEEP_ALIVE_TIME_DEFAULT}</li>
      * <li>{@code rx2.io-priority} (int): sets the thread priority of the {@link #io()} Scheduler, default is {@link Thread#NORM_PRIORITY}</li>
      * </ul>
      * <p>
@@ -243,9 +266,9 @@ public final class Schedulers {
      * <p>
      * Uses:
      * <ul>
-     * <li>main event loop</li>
+     * <li>event loop</li>
      * <li>support Schedulers.from(Executor) and from(ExecutorService) with delayed scheduling</li>
-     * <li>support benchmarks that pipeline data from the main thread to some other thread and
+     * <li>support benchmarks that pipeline data from some thread to another thread and
      * avoid core-bashing of computation's round-robin nature</li>
      * </ul>
      * <p>
@@ -297,6 +320,9 @@ public final class Schedulers {
      * a time delay or periodically will use the {@link #single()} scheduler for the timed waiting
      * before posting the actual task to the given executor.
      * <p>
+     * Tasks submitted to the {@link io.reactivex.Scheduler.Worker Scheduler.Worker} of this {@code Scheduler} are also not interruptible. Use the
+     * {@link #from(Executor, boolean)} overload to enable task interruption via this wrapper.
+     * <p>
      * If the provided executor supports the standard Java {@link ExecutorService} API,
      * cancelling tasks scheduled by this scheduler can be cancelled/interrupted by calling
      * {@link io.reactivex.disposables.Disposable#dispose()}. In addition, tasks scheduled with
@@ -313,7 +339,7 @@ public final class Schedulers {
      * <p>
      * Starting, stopping and restarting this scheduler is not supported (no-op) and the provided
      * executor's lifecycle must be managed externally:
-     * <code><pre>
+     * <pre><code>
      * ExecutorService exec = Executors.newSingleThreadedExecutor();
      * try {
      *     Scheduler scheduler = Schedulers.from(exec);
@@ -325,9 +351,9 @@ public final class Schedulers {
      * } finally {
      *     exec.shutdown();
      * }
-     * </pre></code>
+     * </code></pre>
      * <p>
-     * This type of scheduler is less sensitive to leaking {@link io.reactivex.Scheduler.Worker} instances, although
+     * This type of scheduler is less sensitive to leaking {@link io.reactivex.Scheduler.Worker Scheduler.Worker} instances, although
      * not disposing a worker that has timed/delayed tasks not cancelled by other means may leak resources and/or
      * execute those tasks "unexpectedly".
      * <p>
@@ -338,7 +364,67 @@ public final class Schedulers {
      */
     @NonNull
     public static Scheduler from(@NonNull Executor executor) {
-        return new ExecutorScheduler(executor);
+        return new ExecutorScheduler(executor, false);
+    }
+
+    /**
+     * Wraps an {@link Executor} into a new Scheduler instance and delegates {@code schedule()}
+     * calls to it.
+     * <p>
+     * The tasks scheduled by the returned {@link Scheduler} and its {@link io.reactivex.Scheduler.Worker Scheduler.Worker}
+     * can be optionally interrupted.
+     * <p>
+     * If the provided executor doesn't support any of the more specific standard Java executor
+     * APIs, tasks scheduled with a time delay or periodically will use the
+     * {@link #single()} scheduler for the timed waiting
+     * before posting the actual task to the given executor.
+     * <p>
+     * If the provided executor supports the standard Java {@link ExecutorService} API,
+     * canceling tasks scheduled by this scheduler can be cancelled/interrupted by calling
+     * {@link io.reactivex.disposables.Disposable#dispose()}. In addition, tasks scheduled with
+     * a time delay or periodically will use the {@link #single()} scheduler for the timed waiting
+     * before posting the actual task to the given executor.
+     * <p>
+     * If the provided executor supports the standard Java {@link ScheduledExecutorService} API,
+     * canceling tasks scheduled by this scheduler can be cancelled/interrupted by calling
+     * {@link io.reactivex.disposables.Disposable#dispose()}. In addition, tasks scheduled with
+     * a time delay or periodically will use the provided executor. Note, however, if the provided
+     * {@code ScheduledExecutorService} instance is not single threaded, tasks scheduled
+     * with a time delay close to each other may end up executing in different order than
+     * the original schedule() call was issued. This limitation may be lifted in a future patch.
+     * <p>
+     * Starting, stopping and restarting this scheduler is not supported (no-op) and the provided
+     * executor's lifecycle must be managed externally:
+     * <pre><code>
+     * ExecutorService exec = Executors.newSingleThreadedExecutor();
+     * try {
+     *     Scheduler scheduler = Schedulers.from(exec, true);
+     *     Flowable.just(1)
+     *        .subscribeOn(scheduler)
+     *        .map(v -&gt; v + 1)
+     *        .observeOn(scheduler)
+     *        .blockingSubscribe(System.out::println);
+     * } finally {
+     *     exec.shutdown();
+     * }
+     * </code></pre>
+     * <p>
+     * This type of scheduler is less sensitive to leaking {@link io.reactivex.Scheduler.Worker Scheduler.Worker} instances, although
+     * not disposing a worker that has timed/delayed tasks not cancelled by other means may leak resources and/or
+     * execute those tasks "unexpectedly".
+     * <p>
+     * Note that this method returns a new {@link Scheduler} instance, even for the same {@link Executor} instance.
+     * @param executor
+     *          the executor to wrap
+     * @param interruptibleWorker if {@code true} the tasks submitted to the {@link io.reactivex.Scheduler.Worker Scheduler.Worker} will
+     * be interrupted when the task is disposed.
+     * @return the new Scheduler wrapping the Executor
+     * @since 2.2.6 - experimental
+     */
+    @NonNull
+    @Experimental
+    public static Scheduler from(@NonNull Executor executor, boolean interruptibleWorker) {
+        return new ExecutorScheduler(executor, interruptibleWorker);
     }
 
     /**

@@ -13,7 +13,6 @@
 
 package io.reactivex.internal.operators.observable;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
@@ -46,6 +45,7 @@ public class ObservableTakeUntilPredicateTest {
         verify(o, never()).onError(any(Throwable.class));
         verify(o).onComplete();
     }
+
     @Test
     public void takeAll() {
         Observer<Object> o = TestHelper.mockObserver();
@@ -62,6 +62,7 @@ public class ObservableTakeUntilPredicateTest {
         verify(o, never()).onError(any(Throwable.class));
         verify(o).onComplete();
     }
+
     @Test
     public void takeFirst() {
         Observer<Object> o = TestHelper.mockObserver();
@@ -78,6 +79,7 @@ public class ObservableTakeUntilPredicateTest {
         verify(o, never()).onError(any(Throwable.class));
         verify(o).onComplete();
     }
+
     @Test
     public void takeSome() {
         Observer<Object> o = TestHelper.mockObserver();
@@ -96,6 +98,7 @@ public class ObservableTakeUntilPredicateTest {
         verify(o, never()).onError(any(Throwable.class));
         verify(o).onComplete();
     }
+
     @Test
     public void functionThrows() {
         Observer<Object> o = TestHelper.mockObserver();
@@ -114,6 +117,7 @@ public class ObservableTakeUntilPredicateTest {
         verify(o).onError(any(TestException.class));
         verify(o, never()).onComplete();
     }
+
     @Test
     public void sourceThrows() {
         Observer<Object> o = TestHelper.mockObserver();
@@ -136,7 +140,7 @@ public class ObservableTakeUntilPredicateTest {
 
     @Test
     public void testErrorIncludesLastValueAsCause() {
-        TestObserver<String> ts = new TestObserver<String>();
+        TestObserver<String> to = new TestObserver<String>();
         final TestException e = new TestException("Forced failure");
         Predicate<String> predicate = (new Predicate<String>() {
             @Override
@@ -144,11 +148,11 @@ public class ObservableTakeUntilPredicateTest {
                     throw e;
             }
         });
-        Observable.just("abc").takeUntil(predicate).subscribe(ts);
+        Observable.just("abc").takeUntil(predicate).subscribe(to);
 
-        ts.assertTerminated();
-        ts.assertNotComplete();
-        ts.assertError(TestException.class);
+        to.assertTerminated();
+        to.assertNotComplete();
+        to.assertError(TestException.class);
         // FIXME last cause value is not saved
 //        assertTrue(ts.errors().get(0).getCause().getMessage().contains("abc"));
     }

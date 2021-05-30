@@ -19,7 +19,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
-import org.reactivestreams.*;
+import org.reactivestreams.Subscription;
 
 import io.reactivex.*;
 import io.reactivex.exceptions.TestException;
@@ -121,7 +121,7 @@ public class MaybeFlatMapIterableFlowableTest {
 
     @Test
     public void fused() {
-        TestSubscriber<Integer> to = SubscriberFusion.newTest(QueueDisposable.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         Maybe.just(1).flattenAsFlowable(new Function<Integer, Iterable<Integer>>() {
             @Override
@@ -129,17 +129,17 @@ public class MaybeFlatMapIterableFlowableTest {
                 return Arrays.asList(v, v + 1);
             }
         })
-        .subscribe(to);
+        .subscribe(ts);
 
-        to.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueDisposable.ASYNC))
+        ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult(1, 2);
         ;
     }
 
     @Test
     public void fusedNoSync() {
-        TestSubscriber<Integer> to = SubscriberFusion.newTest(QueueDisposable.SYNC);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.SYNC);
 
         Maybe.just(1).flattenAsFlowable(new Function<Integer, Iterable<Integer>>() {
             @Override
@@ -147,10 +147,10 @@ public class MaybeFlatMapIterableFlowableTest {
                 return Arrays.asList(v, v + 1);
             }
         })
-        .subscribe(to);
+        .subscribe(ts);
 
-        to.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueDisposable.NONE))
+        ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.NONE))
         .assertResult(1, 2);
         ;
     }
@@ -299,24 +299,24 @@ public class MaybeFlatMapIterableFlowableTest {
                         return Arrays.asList(1, 2, 3);
                     }
         }).subscribe(new FlowableSubscriber<Integer>() {
-            QueueSubscription<Integer> qd;
+            QueueSubscription<Integer> qs;
             @SuppressWarnings("unchecked")
             @Override
-            public void onSubscribe(Subscription d) {
-                qd = (QueueSubscription<Integer>)d;
+            public void onSubscribe(Subscription s) {
+                qs = (QueueSubscription<Integer>)s;
 
-                assertEquals(QueueSubscription.ASYNC, qd.requestFusion(QueueSubscription.ANY));
+                assertEquals(QueueFuseable.ASYNC, qs.requestFusion(QueueFuseable.ANY));
             }
 
             @Override
             public void onNext(Integer value) {
-                assertFalse(qd.isEmpty());
+                assertFalse(qs.isEmpty());
 
-                qd.clear();
+                qs.clear();
 
-                assertTrue(qd.isEmpty());
+                assertTrue(qs.isEmpty());
 
-                qd.cancel();
+                qs.cancel();
             }
 
             @Override
@@ -403,7 +403,7 @@ public class MaybeFlatMapIterableFlowableTest {
         final Integer[] a = new Integer[1000];
         Arrays.fill(a, 1);
 
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps = PublishSubject.create();
 
             ps.onNext(1);
@@ -436,13 +436,13 @@ public class MaybeFlatMapIterableFlowableTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 
     @Test
     public void cancelCreateInnerRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps = PublishSubject.create();
 
             ps.onNext(1);
@@ -470,7 +470,7 @@ public class MaybeFlatMapIterableFlowableTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 

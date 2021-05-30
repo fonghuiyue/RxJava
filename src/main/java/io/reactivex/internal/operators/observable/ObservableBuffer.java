@@ -49,17 +49,17 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
     }
 
     static final class BufferExactObserver<T, U extends Collection<? super T>> implements Observer<T>, Disposable {
-        final Observer<? super U> actual;
+        final Observer<? super U> downstream;
         final int count;
         final Callable<U> bufferSupplier;
         U buffer;
 
         int size;
 
-        Disposable s;
+        Disposable upstream;
 
         BufferExactObserver(Observer<? super U> actual, int count, Callable<U> bufferSupplier) {
-            this.actual = actual;
+            this.downstream = actual;
             this.count = count;
             this.bufferSupplier = bufferSupplier;
         }
@@ -71,11 +71,11 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
             } catch (Throwable t) {
                 Exceptions.throwIfFatal(t);
                 buffer = null;
-                if (s == null) {
-                    EmptyDisposable.error(t, actual);
+                if (upstream == null) {
+                    EmptyDisposable.error(t, downstream);
                 } else {
-                    s.dispose();
-                    actual.onError(t);
+                    upstream.dispose();
+                    downstream.onError(t);
                 }
                 return false;
             }
@@ -86,21 +86,21 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
         }
 
         @Override
-        public void onSubscribe(Disposable s) {
-            if (DisposableHelper.validate(this.s, s)) {
-                this.s = s;
-                actual.onSubscribe(this);
+        public void onSubscribe(Disposable d) {
+            if (DisposableHelper.validate(this.upstream, d)) {
+                this.upstream = d;
+                downstream.onSubscribe(this);
             }
         }
 
         @Override
         public void dispose() {
-            s.dispose();
+            upstream.dispose();
         }
 
         @Override
         public boolean isDisposed() {
-            return s.isDisposed();
+            return upstream.isDisposed();
         }
 
         @Override
@@ -110,7 +110,7 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
                 b.add(t);
 
                 if (++size >= count) {
-                    actual.onNext(b);
+                    downstream.onNext(b);
 
                     size = 0;
                     createBuffer();
@@ -121,17 +121,19 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
         @Override
         public void onError(Throwable t) {
             buffer = null;
-            actual.onError(t);
+            downstream.onError(t);
         }
 
         @Override
         public void onComplete() {
             U b = buffer;
-            buffer = null;
-            if (b != null && !b.isEmpty()) {
-                actual.onNext(b);
+            if (b != null) {
+                buffer = null;
+                if (!b.isEmpty()) {
+                    downstream.onNext(b);
+                }
+                downstream.onComplete();
             }
-            actual.onComplete();
         }
     }
 
@@ -139,19 +141,19 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
     extends AtomicBoolean implements Observer<T>, Disposable {
 
         private static final long serialVersionUID = -8223395059921494546L;
-        final Observer<? super U> actual;
+        final Observer<? super U> downstream;
         final int count;
         final int skip;
         final Callable<U> bufferSupplier;
 
-        Disposable s;
+        Disposable upstream;
 
         final ArrayDeque<U> buffers;
 
         long index;
 
         BufferSkipObserver(Observer<? super U> actual, int count, int skip, Callable<U> bufferSupplier) {
-            this.actual = actual;
+            this.downstream = actual;
             this.count = count;
             this.skip = skip;
             this.bufferSupplier = bufferSupplier;
@@ -159,22 +161,21 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
         }
 
         @Override
-        public void onSubscribe(Disposable s) {
-            if (DisposableHelper.validate(this.s, s)) {
-                this.s = s;
-                actual.onSubscribe(this);
+        public void onSubscribe(Disposable d) {
+            if (DisposableHelper.validate(this.upstream, d)) {
+                this.upstream = d;
+                downstream.onSubscribe(this);
             }
         }
 
-
         @Override
         public void dispose() {
-            s.dispose();
+            upstream.dispose();
         }
 
         @Override
         public boolean isDisposed() {
-            return s.isDisposed();
+            return upstream.isDisposed();
         }
 
         @Override
@@ -186,8 +187,8 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
                     b = ObjectHelper.requireNonNull(bufferSupplier.call(), "The bufferSupplier returned a null collection. Null values are generally not allowed in 2.x operators and sources.");
                 } catch (Throwable e) {
                     buffers.clear();
-                    s.dispose();
-                    actual.onError(e);
+                    upstream.dispose();
+                    downstream.onError(e);
                     return;
                 }
 
@@ -201,7 +202,7 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
                 if (count <= b.size()) {
                     it.remove();
 
-                    actual.onNext(b);
+                    downstream.onNext(b);
                 }
             }
         }
@@ -209,15 +210,15 @@ public final class ObservableBuffer<T, U extends Collection<? super T>> extends 
         @Override
         public void onError(Throwable t) {
             buffers.clear();
-            actual.onError(t);
+            downstream.onError(t);
         }
 
         @Override
         public void onComplete() {
             while (!buffers.isEmpty()) {
-                actual.onNext(buffers.poll());
+                downstream.onNext(buffers.poll());
             }
-            actual.onComplete();
+            downstream.onComplete();
         }
     }
 }

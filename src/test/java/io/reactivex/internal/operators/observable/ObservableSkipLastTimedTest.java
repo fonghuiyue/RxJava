@@ -13,7 +13,6 @@
 
 package io.reactivex.internal.operators.observable;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.concurrent.TimeUnit;
@@ -195,7 +194,7 @@ public class ObservableSkipLastTimedTest {
     @Test
     public void onNextDisposeRace() {
         TestScheduler scheduler = new TestScheduler();
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps = PublishSubject.create();
 
             final TestObserver<Integer> to = ps.skipLast(1, TimeUnit.DAYS, scheduler).test();

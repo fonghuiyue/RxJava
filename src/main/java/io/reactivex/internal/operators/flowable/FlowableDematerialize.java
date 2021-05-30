@@ -16,56 +16,79 @@ package io.reactivex.internal.operators.flowable;
 import org.reactivestreams.*;
 
 import io.reactivex.*;
+import io.reactivex.exceptions.Exceptions;
+import io.reactivex.functions.Function;
+import io.reactivex.internal.functions.ObjectHelper;
 import io.reactivex.internal.subscriptions.SubscriptionHelper;
 import io.reactivex.plugins.RxJavaPlugins;
 
-public final class FlowableDematerialize<T> extends AbstractFlowableWithUpstream<Notification<T>, T> {
+public final class FlowableDematerialize<T, R> extends AbstractFlowableWithUpstream<T, R> {
 
-    public FlowableDematerialize(Flowable<Notification<T>> source) {
+    final Function<? super T, ? extends Notification<R>> selector;
+
+    public FlowableDematerialize(Flowable<T> source, Function<? super T, ? extends Notification<R>> selector) {
         super(source);
+        this.selector = selector;
     }
 
     @Override
-    protected void subscribeActual(Subscriber<? super T> s) {
-        source.subscribe(new DematerializeSubscriber<T>(s));
+    protected void subscribeActual(Subscriber<? super R> subscriber) {
+        source.subscribe(new DematerializeSubscriber<T, R>(subscriber, selector));
     }
 
-    static final class DematerializeSubscriber<T> implements FlowableSubscriber<Notification<T>>, Subscription {
-        final Subscriber<? super T> actual;
+    static final class DematerializeSubscriber<T, R> implements FlowableSubscriber<T>, Subscription {
+
+        final Subscriber<? super R> downstream;
+
+        final Function<? super T, ? extends Notification<R>> selector;
 
         boolean done;
 
-        Subscription s;
+        Subscription upstream;
 
-        DematerializeSubscriber(Subscriber<? super T> actual) {
-            this.actual = actual;
+        DematerializeSubscriber(Subscriber<? super R> downstream, Function<? super T, ? extends Notification<R>> selector) {
+            this.downstream = downstream;
+            this.selector = selector;
         }
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (SubscriptionHelper.validate(this.s, s)) {
-                this.s = s;
-                actual.onSubscribe(this);
+            if (SubscriptionHelper.validate(this.upstream, s)) {
+                this.upstream = s;
+                downstream.onSubscribe(this);
             }
         }
 
         @Override
-        public void onNext(Notification<T> t) {
+        public void onNext(T item) {
             if (done) {
-                if (t.isOnError()) {
-                    RxJavaPlugins.onError(t.getError());
+                if (item instanceof Notification) {
+                    Notification<?> notification = (Notification<?>)item;
+                    if (notification.isOnError()) {
+                        RxJavaPlugins.onError(notification.getError());
+                    }
                 }
                 return;
             }
-            if (t.isOnError()) {
-                s.cancel();
-                onError(t.getError());
+
+            Notification<R> notification;
+
+            try {
+                notification = ObjectHelper.requireNonNull(selector.apply(item), "The selector returned a null Notification");
+            } catch (Throwable ex) {
+                Exceptions.throwIfFatal(ex);
+                upstream.cancel();
+                onError(ex);
+                return;
             }
-            else if (t.isOnComplete()) {
-                s.cancel();
+            if (notification.isOnError()) {
+                upstream.cancel();
+                onError(notification.getError());
+            } else if (notification.isOnComplete()) {
+                upstream.cancel();
                 onComplete();
             } else {
-                actual.onNext(t.getValue());
+                downstream.onNext(notification.getValue());
             }
         }
 
@@ -77,8 +100,9 @@ public final class FlowableDematerialize<T> extends AbstractFlowableWithUpstream
             }
             done = true;
 
-            actual.onError(t);
+            downstream.onError(t);
         }
+
         @Override
         public void onComplete() {
             if (done) {
@@ -86,17 +110,17 @@ public final class FlowableDematerialize<T> extends AbstractFlowableWithUpstream
             }
             done = true;
 
-            actual.onComplete();
+            downstream.onComplete();
         }
 
         @Override
         public void request(long n) {
-            s.request(n);
+            upstream.request(n);
         }
 
         @Override
         public void cancel() {
-            s.cancel();
+            upstream.cancel();
         }
     }
 }

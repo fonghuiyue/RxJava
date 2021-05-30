@@ -282,6 +282,7 @@ public class ObservableSingleTest {
 
         InOrder inOrder = inOrder(observer);
         inOrder.verify(observer).onComplete();
+        inOrder.verify(observer, never()).onError(any(Throwable.class));
         inOrder.verifyNoMoreInteractions();
     }
 
@@ -554,5 +555,14 @@ public class ObservableSingleTest {
                 return o.singleElement();
             }
         });
+    }
+
+    @Test
+    public void singleOrError() {
+        Observable.empty()
+        .singleOrError()
+        .toObservable()
+        .test()
+        .assertFailure(NoSuchElementException.class);
     }
 }

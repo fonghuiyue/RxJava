@@ -24,6 +24,8 @@ import io.reactivex.internal.subscriptions.SubscriptionHelper;
 import io.reactivex.internal.util.BlockingHelper;
 import io.reactivex.plugins.RxJavaPlugins;
 
+import static io.reactivex.internal.util.ExceptionHelper.timeoutMessage;
+
 /**
  * A Subscriber + Future that expects exactly one upstream value and provides it
  * via the (blocking) Future API.
@@ -36,22 +38,22 @@ implements FlowableSubscriber<T>, Future<T>, Subscription {
     T value;
     Throwable error;
 
-    final AtomicReference<Subscription> s;
+    final AtomicReference<Subscription> upstream;
 
     public FutureSubscriber() {
         super(1);
-        this.s = new AtomicReference<Subscription>();
+        this.upstream = new AtomicReference<Subscription>();
     }
 
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
         for (;;) {
-            Subscription a = s.get();
+            Subscription a = upstream.get();
             if (a == this || a == SubscriptionHelper.CANCELLED) {
                 return false;
             }
 
-            if (s.compareAndSet(a, SubscriptionHelper.CANCELLED)) {
+            if (upstream.compareAndSet(a, SubscriptionHelper.CANCELLED)) {
                 if (a != null) {
                     a.cancel();
                 }
@@ -63,7 +65,7 @@ implements FlowableSubscriber<T>, Future<T>, Subscription {
 
     @Override
     public boolean isCancelled() {
-        return SubscriptionHelper.isCancelled(s.get());
+        return upstream.get() == SubscriptionHelper.CANCELLED;
     }
 
     @Override
@@ -93,7 +95,7 @@ implements FlowableSubscriber<T>, Future<T>, Subscription {
         if (getCount() != 0) {
             BlockingHelper.verifyNonBlocking();
             if (!await(timeout, unit)) {
-                throw new TimeoutException();
+                throw new TimeoutException(timeoutMessage(timeout, unit));
             }
         }
 
@@ -110,15 +112,13 @@ implements FlowableSubscriber<T>, Future<T>, Subscription {
 
     @Override
     public void onSubscribe(Subscription s) {
-        if (SubscriptionHelper.setOnce(this.s, s)) {
-            s.request(Long.MAX_VALUE);
-        }
+        SubscriptionHelper.setOnce(this.upstream, s, Long.MAX_VALUE);
     }
 
     @Override
     public void onNext(T t) {
         if (value != null) {
-            s.get().cancel();
+            upstream.get().cancel();
             onError(new IndexOutOfBoundsException("More than one element received"));
             return;
         }
@@ -128,13 +128,13 @@ implements FlowableSubscriber<T>, Future<T>, Subscription {
     @Override
     public void onError(Throwable t) {
         for (;;) {
-            Subscription a = s.get();
+            Subscription a = upstream.get();
             if (a == this || a == SubscriptionHelper.CANCELLED) {
                 RxJavaPlugins.onError(t);
                 return;
             }
             error = t;
-            if (s.compareAndSet(a, this)) {
+            if (upstream.compareAndSet(a, this)) {
                 countDown();
                 return;
             }
@@ -148,11 +148,11 @@ implements FlowableSubscriber<T>, Future<T>, Subscription {
             return;
         }
         for (;;) {
-            Subscription a = s.get();
+            Subscription a = upstream.get();
             if (a == this || a == SubscriptionHelper.CANCELLED) {
                 return;
             }
-            if (s.compareAndSet(a, this)) {
+            if (upstream.compareAndSet(a, this)) {
                 countDown();
                 return;
             }

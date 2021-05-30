@@ -20,22 +20,104 @@ import java.util.concurrent.atomic.*;
 
 import io.reactivex.Observer;
 import io.reactivex.Scheduler;
-import io.reactivex.annotations.CheckReturnValue;
+import io.reactivex.annotations.*;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.internal.functions.ObjectHelper;
 import io.reactivex.internal.util.NotificationLite;
 import io.reactivex.plugins.RxJavaPlugins;
 
 /**
- * Replays events to Observers.
+ * Replays events (in a configurable bounded or unbounded manner) to current and late {@link Observer}s.
  * <p>
- * <img width="640" height="405" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/S.ReplaySubject.png" alt="">
+ * This subject does not have a public constructor by design; a new empty instance of this
+ * {@code ReplaySubject} can be created via the following {@code create} methods that
+ * allow specifying the retention policy for items:
+ * <ul>
+ * <li>{@link #create()} - creates an empty, unbounded {@code ReplaySubject} that
+ *     caches all items and the terminal event it receives.
+ * <p>
+ * <img width="640" height="299" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/ReplaySubject.u.png" alt="">
+ * <p>
+ * <img width="640" height="398" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/ReplaySubject.ue.png" alt="">
+ * </li>
+ * <li>{@link #create(int)} - creates an empty, unbounded {@code ReplaySubject}
+ *     with a hint about how many <b>total</b> items one expects to retain.
+ * </li>
+ * <li>{@link #createWithSize(int)} - creates an empty, size-bound {@code ReplaySubject}
+ *     that retains at most the given number of the latest item it receives.
+ * <p>
+ * <img width="640" height="420" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/ReplaySubject.n.png" alt="">
+ * </li>
+ * <li>{@link #createWithTime(long, TimeUnit, Scheduler)} - creates an empty, time-bound
+ *     {@code ReplaySubject} that retains items no older than the specified time amount.
+ * <p>
+ * <img width="640" height="415" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/ReplaySubject.t.png" alt="">
+ * </li>
+ * <li>{@link #createWithTimeAndSize(long, TimeUnit, Scheduler, int)} - creates an empty,
+ *     time- and size-bound {@code ReplaySubject} that retains at most the given number
+ *     items that are also not older than the specified time amount.
+ * <p>
+ * <img width="640" height="404" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/ReplaySubject.nt.png" alt="">
+ * </li>
+ * </ul>
+ * <p>
+ * Since a {@code Subject} is conceptionally derived from the {@code Processor} type in the Reactive Streams specification,
+ * {@code null}s are not allowed (<a href="https://github.com/reactive-streams/reactive-streams-jvm#2.13">Rule 2.13</a>) as
+ * parameters to {@link #onNext(Object)} and {@link #onError(Throwable)}. Such calls will result in a
+ * {@link NullPointerException} being thrown and the subject's state is not changed.
+ * <p>
+ * Since a {@code ReplaySubject} is an {@link io.reactivex.Observable}, it does not support backpressure.
+ * <p>
+ * When this {@code ReplaySubject} is terminated via {@link #onError(Throwable)} or {@link #onComplete()},
+ * late {@link io.reactivex.Observer}s will receive the retained/cached items first (if any) followed by the respective
+ * terminal event. If the {@code ReplaySubject} has a time-bound, the age of the retained/cached items are still considered
+ * when replaying and thus it may result in no items being emitted before the terminal event.
+ * <p>
+ * Once an {@code Observer} has subscribed, it will receive items continuously from that point on. Bounds only affect how
+ * many past items a new {@code Observer} will receive before it catches up with the live event feed.
+ * <p>
+ * Even though {@code ReplaySubject} implements the {@code Observer} interface, calling
+ * {@code onSubscribe} is not required (<a href="https://github.com/reactive-streams/reactive-streams-jvm#2.12">Rule 2.12</a>)
+ * if the subject is used as a standalone source. However, calling {@code onSubscribe}
+ * after the {@code ReplaySubject} reached its terminal state will result in the
+ * given {@code Disposable} being disposed immediately.
+ * <p>
+ * Calling {@link #onNext(Object)}, {@link #onError(Throwable)} and {@link #onComplete()}
+ * is required to be serialized (called from the same thread or called non-overlappingly from different threads
+ * through external means of serialization). The {@link #toSerialized()} method available to all {@code Subject}s
+ * provides such serialization and also protects against reentrance (i.e., when a downstream {@code Observer}
+ * consuming this subject also wants to call {@link #onNext(Object)} on this subject recursively).
+ * <p>
+ * This {@code ReplaySubject} supports the standard state-peeking methods {@link #hasComplete()}, {@link #hasThrowable()},
+ * {@link #getThrowable()} and {@link #hasObservers()} as well as means to read the retained/cached items
+ * in a non-blocking and thread-safe manner via {@link #hasValue()}, {@link #getValue()},
+ * {@link #getValues()} or {@link #getValues(Object[])}.
+ * <p>
+ * Note that due to concurrency requirements, a size- and time-bounded {@code ReplaySubject} may hold strong references to more
+ * source emissions than specified while it isn't terminated yet. Use the {@link #cleanupBuffer()} to allow
+ * such inaccessible items to be cleaned up by GC once no consumer references it anymore.
+ * <dl>
+ *  <dt><b>Scheduler:</b></dt>
+ *  <dd>{@code ReplaySubject} does not operate by default on a particular {@link io.reactivex.Scheduler} and
+ *  the {@code Observer}s get notified on the thread the respective {@code onXXX} methods were invoked.
+ *  Time-bound {@code ReplaySubject}s use the given {@code Scheduler} in their {@code create} methods
+ *  as time source to timestamp of items received for the age checks.</dd>
+ *  <dt><b>Error handling:</b></dt>
+ *  <dd>When the {@link #onError(Throwable)} is called, the {@code ReplaySubject} enters into a terminal state
+ *  and emits the same {@code Throwable} instance to the last set of {@code Observer}s. During this emission,
+ *  if one or more {@code Observer}s dispose their respective {@code Disposable}s, the
+ *  {@code Throwable} is delivered to the global error handler via
+ *  {@link io.reactivex.plugins.RxJavaPlugins#onError(Throwable)} (multiple times if multiple {@code Observer}s
+ *  cancel at once).
+ *  If there were no {@code Observer}s subscribed to this {@code ReplaySubject} when the {@code onError()}
+ *  was called, the global error handler is not invoked.
+ *  </dd>
+ * </dl>
  * <p>
  * Example usage:
- * <p>
  * <pre> {@code
 
-  ReplaySubject<Object> subject = new ReplaySubject<>();
+  ReplaySubject<Object> subject = ReplaySubject.create();
   subject.onNext("one");
   subject.onNext("two");
   subject.onNext("three");
@@ -76,6 +158,7 @@ public final class ReplaySubject<T> extends Subject<T> {
      * @return the created subject
      */
     @CheckReturnValue
+    @NonNull
     public static <T> ReplaySubject<T> create() {
         return new ReplaySubject<T>(new UnboundedReplayBuffer<T>(16));
     }
@@ -96,6 +179,7 @@ public final class ReplaySubject<T> extends Subject<T> {
      * @return the created subject
      */
     @CheckReturnValue
+    @NonNull
     public static <T> ReplaySubject<T> create(int capacityHint) {
         return new ReplaySubject<T>(new UnboundedReplayBuffer<T>(capacityHint));
     }
@@ -121,6 +205,7 @@ public final class ReplaySubject<T> extends Subject<T> {
      * @return the created subject
      */
     @CheckReturnValue
+    @NonNull
     public static <T> ReplaySubject<T> createWithSize(int maxSize) {
         return new ReplaySubject<T>(new SizeBoundReplayBuffer<T>(maxSize));
     }
@@ -175,6 +260,7 @@ public final class ReplaySubject<T> extends Subject<T> {
      * @return the created subject
      */
     @CheckReturnValue
+    @NonNull
     public static <T> ReplaySubject<T> createWithTime(long maxAge, TimeUnit unit, Scheduler scheduler) {
         return new ReplaySubject<T>(new SizeAndTimeBoundReplayBuffer<T>(Integer.MAX_VALUE, maxAge, unit, scheduler));
     }
@@ -214,6 +300,7 @@ public final class ReplaySubject<T> extends Subject<T> {
      * @return the created subject
      */
     @CheckReturnValue
+    @NonNull
     public static <T> ReplaySubject<T> createWithTimeAndSize(long maxAge, TimeUnit unit, Scheduler scheduler, int maxSize) {
         return new ReplaySubject<T>(new SizeAndTimeBoundReplayBuffer<T>(maxSize, maxAge, unit, scheduler));
     }
@@ -245,18 +332,15 @@ public final class ReplaySubject<T> extends Subject<T> {
     }
 
     @Override
-    public void onSubscribe(Disposable s) {
+    public void onSubscribe(Disposable d) {
         if (done) {
-            s.dispose();
+            d.dispose();
         }
     }
 
     @Override
     public void onNext(T t) {
-        if (t == null) {
-            onError(new NullPointerException("onNext called with null. Null values are generally not allowed in 2.x operators and sources."));
-            return;
-        }
+        ObjectHelper.requireNonNull(t, "onNext called with null. Null values are generally not allowed in 2.x operators and sources.");
         if (done) {
             return;
         }
@@ -271,9 +355,7 @@ public final class ReplaySubject<T> extends Subject<T> {
 
     @Override
     public void onError(Throwable t) {
-        if (t == null) {
-            t = new NullPointerException("onError called with null. Null values are generally not allowed in 2.x operators and sources.");
-        }
+        ObjectHelper.requireNonNull(t, "onError called with null. Null values are generally not allowed in 2.x operators and sources.");
         if (done) {
             RxJavaPlugins.onError(t);
             return;
@@ -319,6 +401,7 @@ public final class ReplaySubject<T> extends Subject<T> {
     }
 
     @Override
+    @Nullable
     public Throwable getThrowable() {
         Object o = buffer.get();
         if (NotificationLite.isError(o)) {
@@ -332,8 +415,27 @@ public final class ReplaySubject<T> extends Subject<T> {
      * <p>The method is thread-safe.
      * @return a single value the Subject currently has or null if no such value exists
      */
+    @Nullable
     public T getValue() {
         return buffer.getValue();
+    }
+
+    /**
+     * Makes sure the item cached by the head node in a bounded
+     * ReplaySubject is released (as it is never part of a replay).
+     * <p>
+     * By default, live bounded buffers will remember one item before
+     * the currently receivable one to ensure subscribers can always
+     * receive a continuous sequence of items. A terminated ReplaySubject
+     * automatically releases this inaccessible item.
+     * <p>
+     * The method must be called sequentially, similar to the standard
+     * {@code onXXX} methods.
+     * <p>History: 2.1.11 - experimental
+     * @since 2.2
+     */
+    public void cleanupBuffer() {
+        buffer.trimHead();
     }
 
     /** An empty array to avoid allocation in getValues(). */
@@ -466,6 +568,7 @@ public final class ReplaySubject<T> extends Subject<T> {
 
         int size();
 
+        @Nullable
         T getValue();
 
         T[] getValues(T[] array);
@@ -483,12 +586,18 @@ public final class ReplaySubject<T> extends Subject<T> {
          * @return true if successful
          */
         boolean compareAndSet(Object expected, Object next);
+
+        /**
+         * Make sure an old inaccessible head value is released
+         * in a bounded buffer.
+         */
+        void trimHead();
     }
 
     static final class ReplayDisposable<T> extends AtomicInteger implements Disposable {
 
         private static final long serialVersionUID = 466549804534799122L;
-        final Observer<? super T> actual;
+        final Observer<? super T> downstream;
         final ReplaySubject<T> state;
 
         Object index;
@@ -496,7 +605,7 @@ public final class ReplaySubject<T> extends Subject<T> {
         volatile boolean cancelled;
 
         ReplayDisposable(Observer<? super T> actual, ReplaySubject<T> state) {
-            this.actual = actual;
+            this.downstream = actual;
             this.state = state;
         }
 
@@ -539,11 +648,18 @@ public final class ReplaySubject<T> extends Subject<T> {
         @Override
         public void addFinal(Object notificationLite) {
             buffer.add(notificationLite);
+            trimHead();
             size++;
             done = true;
         }
 
         @Override
+        public void trimHead() {
+            // no-op in this type of buffer
+        }
+
+        @Override
+        @Nullable
         @SuppressWarnings("unchecked")
         public T getValue() {
             int s = size;
@@ -584,7 +700,6 @@ public final class ReplaySubject<T> extends Subject<T> {
                 }
             }
 
-
             if (array.length < s) {
                 array = (T[])Array.newInstance(array.getClass().getComponentType(), s);
             }
@@ -607,7 +722,7 @@ public final class ReplaySubject<T> extends Subject<T> {
 
             int missed = 1;
             final List<Object> b = buffer;
-            final Observer<? super T> a = rs.actual;
+            final Observer<? super T> a = rs.downstream;
 
             Integer indexObject = (Integer)rs.index;
             int index;
@@ -758,10 +873,26 @@ public final class ReplaySubject<T> extends Subject<T> {
             size++;
             t.lazySet(n); // releases both the tail and size
 
+            trimHead();
             done = true;
         }
 
+        /**
+         * Replace a non-empty head node with an empty one to
+         * allow the GC of the inaccessible old value.
+         */
         @Override
+        public void trimHead() {
+            Node<Object> h = head;
+            if (h.value != null) {
+                Node<Object> n = new Node<Object>(null);
+                n.lazySet(h.get());
+                head = n;
+            }
+        }
+
+        @Override
+        @Nullable
         @SuppressWarnings("unchecked")
         public T getValue() {
             Node<Object> prev = null;
@@ -825,7 +956,7 @@ public final class ReplaySubject<T> extends Subject<T> {
             }
 
             int missed = 1;
-            final Observer<? super T> a = rs.actual;
+            final Observer<? super T> a = rs.downstream;
 
             Node<Object> index = (Node<Object>)rs.index;
             if (index == null) {
@@ -919,7 +1050,6 @@ public final class ReplaySubject<T> extends Subject<T> {
 
         volatile boolean done;
 
-
         SizeAndTimeBoundReplayBuffer(int maxSize, long maxAge, TimeUnit unit, Scheduler scheduler) {
             this.maxSize = ObjectHelper.verifyPositive(maxSize, "maxSize");
             this.maxAge = ObjectHelper.verifyPositive(maxAge, "maxAge");
@@ -941,6 +1071,10 @@ public final class ReplaySubject<T> extends Subject<T> {
             TimedNode<Object> h = head;
 
             for (;;) {
+                if (size <= 1) {
+                    head = h;
+                    break;
+                }
                 TimedNode<Object> next = h.get();
                 if (next == null) {
                     head = h;
@@ -953,6 +1087,7 @@ public final class ReplaySubject<T> extends Subject<T> {
                 }
 
                 h = next;
+                size--;
             }
 
         }
@@ -965,12 +1100,24 @@ public final class ReplaySubject<T> extends Subject<T> {
             for (;;) {
                 TimedNode<Object> next = h.get();
                 if (next.get() == null) {
-                    head = h;
+                    if (h.value != null) {
+                        TimedNode<Object> lasth = new TimedNode<Object>(null, 0L);
+                        lasth.lazySet(h.get());
+                        head = lasth;
+                    } else {
+                        head = h;
+                    }
                     break;
                 }
 
                 if (next.time > limit) {
-                    head = h;
+                    if (h.value != null) {
+                        TimedNode<Object> lasth = new TimedNode<Object>(null, 0L);
+                        lasth.lazySet(h.get());
+                        head = lasth;
+                    } else {
+                        head = h;
+                    }
                     break;
                 }
 
@@ -1003,7 +1150,22 @@ public final class ReplaySubject<T> extends Subject<T> {
             done = true;
         }
 
+        /**
+         * Replace a non-empty head node with an empty one to
+         * allow the GC of the inaccessible old value.
+         */
         @Override
+        public void trimHead() {
+            TimedNode<Object> h = head;
+            if (h.value != null) {
+                TimedNode<Object> n = new TimedNode<Object>(null, 0);
+                n.lazySet(h.get());
+                head = n;
+            }
+        }
+
+        @Override
+        @Nullable
         @SuppressWarnings("unchecked")
         public T getValue() {
             TimedNode<Object> prev = null;
@@ -1016,6 +1178,11 @@ public final class ReplaySubject<T> extends Subject<T> {
                 }
                 prev = h;
                 h = next;
+            }
+
+            long limit = scheduler.now(unit) - maxAge;
+            if (h.time < limit) {
+                return null;
             }
 
             Object v = h.value;
@@ -1083,7 +1250,7 @@ public final class ReplaySubject<T> extends Subject<T> {
             }
 
             int missed = 1;
-            final Observer<? super T> a = rs.actual;
+            final Observer<? super T> a = rs.downstream;
 
             TimedNode<Object> index = (TimedNode<Object>)rs.index;
             if (index == null) {

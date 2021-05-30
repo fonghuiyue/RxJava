@@ -20,6 +20,8 @@ import org.junit.Test;
 import org.reactivestreams.*;
 
 import io.reactivex.*;
+import io.reactivex.exceptions.TestException;
+import io.reactivex.functions.Function;
 import io.reactivex.processors.PublishProcessor;
 import io.reactivex.subscribers.TestSubscriber;
 
@@ -153,32 +155,32 @@ public class FlowableTakeUntilTest {
 
     private static class TestObservable implements Publisher<String> {
 
-        Subscriber<? super String> observer;
-        Subscription s;
+        Subscriber<? super String> subscriber;
+        Subscription upstream;
 
         TestObservable(Subscription s) {
-            this.s = s;
+            this.upstream = s;
         }
 
         /* used to simulate subscription */
         public void sendOnCompleted() {
-            observer.onComplete();
+            subscriber.onComplete();
         }
 
         /* used to simulate subscription */
         public void sendOnNext(String value) {
-            observer.onNext(value);
+            subscriber.onNext(value);
         }
 
         /* used to simulate subscription */
         public void sendOnError(Throwable e) {
-            observer.onError(e);
+            subscriber.onError(e);
         }
 
         @Override
-        public void subscribe(Subscriber<? super String> observer) {
-            this.observer = observer;
-            observer.onSubscribe(s);
+        public void subscribe(Subscriber<? super String> subscriber) {
+            this.subscriber = subscriber;
+            subscriber.onSubscribe(upstream);
         }
     }
 
@@ -207,6 +209,7 @@ public class FlowableTakeUntilTest {
         assertFalse("Until still has observers", until.hasSubscribers());
         assertFalse("TestSubscriber is unsubscribed", ts.isCancelled());
     }
+
     @Test
     public void testMainCompletes() {
         PublishProcessor<Integer> source = PublishProcessor.create();
@@ -230,6 +233,7 @@ public class FlowableTakeUntilTest {
         assertFalse("Until still has observers", until.hasSubscribers());
         assertFalse("TestSubscriber is unsubscribed", ts.isCancelled());
     }
+
     @Test
     public void testDownstreamUnsubscribes() {
         PublishProcessor<Integer> source = PublishProcessor.create();
@@ -282,4 +286,143 @@ public class FlowableTakeUntilTest {
     public void dispose() {
         TestHelper.checkDisposed(PublishProcessor.create().takeUntil(Flowable.never()));
     }
+
+    @Test
+    public void doubleOnSubscribe() {
+        TestHelper.checkDoubleOnSubscribeFlowable(new Function<Flowable<Integer>, Flowable<Integer>>() {
+            @Override
+            public Flowable<Integer> apply(Flowable<Integer> c) throws Exception {
+                return c.takeUntil(Flowable.never());
+            }
+        });
+    }
+
+    @Test
+    public void untilPublisherMainSuccess() {
+        PublishProcessor<Integer> main = PublishProcessor.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestSubscriber<Integer> ts = main.takeUntil(other).test();
+
+        assertTrue("Main no subscribers?", main.hasSubscribers());
+        assertTrue("Other no subscribers?", other.hasSubscribers());
+
+        main.onNext(1);
+        main.onNext(2);
+        main.onComplete();
+
+        assertFalse("Main has subscribers?", main.hasSubscribers());
+        assertFalse("Other has subscribers?", other.hasSubscribers());
+
+        ts.assertResult(1, 2);
+    }
+
+    @Test
+    public void untilPublisherMainComplete() {
+        PublishProcessor<Integer> main = PublishProcessor.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestSubscriber<Integer> ts = main.takeUntil(other).test();
+
+        assertTrue("Main no subscribers?", main.hasSubscribers());
+        assertTrue("Other no subscribers?", other.hasSubscribers());
+
+        main.onComplete();
+
+        assertFalse("Main has subscribers?", main.hasSubscribers());
+        assertFalse("Other has subscribers?", other.hasSubscribers());
+
+        ts.assertResult();
+    }
+
+    @Test
+    public void untilPublisherMainError() {
+        PublishProcessor<Integer> main = PublishProcessor.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestSubscriber<Integer> ts = main.takeUntil(other).test();
+
+        assertTrue("Main no subscribers?", main.hasSubscribers());
+        assertTrue("Other no subscribers?", other.hasSubscribers());
+
+        main.onError(new TestException());
+
+        assertFalse("Main has subscribers?", main.hasSubscribers());
+        assertFalse("Other has subscribers?", other.hasSubscribers());
+
+        ts.assertFailure(TestException.class);
+    }
+
+    @Test
+    public void untilPublisherOtherOnNext() {
+        PublishProcessor<Integer> main = PublishProcessor.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestSubscriber<Integer> ts = main.takeUntil(other).test();
+
+        assertTrue("Main no subscribers?", main.hasSubscribers());
+        assertTrue("Other no subscribers?", other.hasSubscribers());
+
+        other.onNext(1);
+
+        assertFalse("Main has subscribers?", main.hasSubscribers());
+        assertFalse("Other has subscribers?", other.hasSubscribers());
+
+        ts.assertResult();
+    }
+
+    @Test
+    public void untilPublisherOtherOnComplete() {
+        PublishProcessor<Integer> main = PublishProcessor.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestSubscriber<Integer> ts = main.takeUntil(other).test();
+
+        assertTrue("Main no subscribers?", main.hasSubscribers());
+        assertTrue("Other no subscribers?", other.hasSubscribers());
+
+        other.onComplete();
+
+        assertFalse("Main has subscribers?", main.hasSubscribers());
+        assertFalse("Other has subscribers?", other.hasSubscribers());
+
+        ts.assertResult();
+    }
+
+    @Test
+    public void untilPublisherOtherError() {
+        PublishProcessor<Integer> main = PublishProcessor.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestSubscriber<Integer> ts = main.takeUntil(other).test();
+
+        assertTrue("Main no subscribers?", main.hasSubscribers());
+        assertTrue("Other no subscribers?", other.hasSubscribers());
+
+        other.onError(new TestException());
+
+        assertFalse("Main has subscribers?", main.hasSubscribers());
+        assertFalse("Other has subscribers?", other.hasSubscribers());
+
+        ts.assertFailure(TestException.class);
+    }
+
+    @Test
+    public void untilPublisherDispose() {
+        PublishProcessor<Integer> main = PublishProcessor.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestSubscriber<Integer> ts = main.takeUntil(other).test();
+
+        assertTrue("Main no subscribers?", main.hasSubscribers());
+        assertTrue("Other no subscribers?", other.hasSubscribers());
+
+        ts.dispose();
+
+        assertFalse("Main has subscribers?", main.hasSubscribers());
+        assertFalse("Other has subscribers?", other.hasSubscribers());
+
+        ts.assertEmpty();
+    }
+
 }

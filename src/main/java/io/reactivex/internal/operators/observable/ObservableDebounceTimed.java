@@ -44,31 +44,31 @@ public final class ObservableDebounceTimed<T> extends AbstractObservableWithUpst
 
     static final class DebounceTimedObserver<T>
     implements Observer<T>, Disposable {
-        final Observer<? super T> actual;
+        final Observer<? super T> downstream;
         final long timeout;
         final TimeUnit unit;
         final Scheduler.Worker worker;
 
-        Disposable s;
+        Disposable upstream;
 
-        final AtomicReference<Disposable> timer = new AtomicReference<Disposable>();
+        Disposable timer;
 
         volatile long index;
 
         boolean done;
 
         DebounceTimedObserver(Observer<? super T> actual, long timeout, TimeUnit unit, Worker worker) {
-            this.actual = actual;
+            this.downstream = actual;
             this.timeout = timeout;
             this.unit = unit;
             this.worker = worker;
         }
 
         @Override
-        public void onSubscribe(Disposable s) {
-            if (DisposableHelper.validate(this.s, s)) {
-                this.s = s;
-                actual.onSubscribe(this);
+        public void onSubscribe(Disposable d) {
+            if (DisposableHelper.validate(this.upstream, d)) {
+                this.upstream = d;
+                downstream.onSubscribe(this);
             }
         }
 
@@ -80,18 +80,15 @@ public final class ObservableDebounceTimed<T> extends AbstractObservableWithUpst
             long idx = index + 1;
             index = idx;
 
-            Disposable d = timer.get();
+            Disposable d = timer;
             if (d != null) {
                 d.dispose();
             }
 
             DebounceEmitter<T> de = new DebounceEmitter<T>(t, idx, this);
-            if (timer.compareAndSet(d, de)) {
-                d = worker.schedule(de, timeout, unit);
-
-                de.setResource(d);
-            }
-
+            timer = de;
+            d = worker.schedule(de, timeout, unit);
+            de.setResource(d);
         }
 
         @Override
@@ -100,8 +97,12 @@ public final class ObservableDebounceTimed<T> extends AbstractObservableWithUpst
                 RxJavaPlugins.onError(t);
                 return;
             }
+            Disposable d = timer;
+            if (d != null) {
+                d.dispose();
+            }
             done = true;
-            actual.onError(t);
+            downstream.onError(t);
             worker.dispose();
         }
 
@@ -112,21 +113,23 @@ public final class ObservableDebounceTimed<T> extends AbstractObservableWithUpst
             }
             done = true;
 
-            Disposable d = timer.get();
-            if (d != DisposableHelper.DISPOSED) {
-                @SuppressWarnings("unchecked")
-                DebounceEmitter<T> de = (DebounceEmitter<T>)d;
-                if (de != null) {
-                    de.run();
-                }
-                actual.onComplete();
-                worker.dispose();
+            Disposable d = timer;
+            if (d != null) {
+                d.dispose();
             }
+
+            @SuppressWarnings("unchecked")
+            DebounceEmitter<T> de = (DebounceEmitter<T>)d;
+            if (de != null) {
+                de.run();
+            }
+            downstream.onComplete();
+            worker.dispose();
         }
 
         @Override
         public void dispose() {
-            s.dispose();
+            upstream.dispose();
             worker.dispose();
         }
 
@@ -137,7 +140,7 @@ public final class ObservableDebounceTimed<T> extends AbstractObservableWithUpst
 
         void emit(long idx, T t, DebounceEmitter<T> emitter) {
             if (idx == index) {
-                actual.onNext(t);
+                downstream.onNext(t);
                 emitter.dispose();
             }
         }

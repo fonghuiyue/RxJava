@@ -17,8 +17,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import io.reactivex.*;
+import io.reactivex.Scheduler.Worker;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.internal.disposables.*;
+import io.reactivex.internal.schedulers.TrampolineScheduler;
 
 public final class ObservableIntervalRange extends Observable<Long> {
     final Scheduler scheduler;
@@ -38,29 +40,35 @@ public final class ObservableIntervalRange extends Observable<Long> {
     }
 
     @Override
-    public void subscribeActual(Observer<? super Long> s) {
-        IntervalRangeObserver is = new IntervalRangeObserver(s, start, end);
-        s.onSubscribe(is);
+    public void subscribeActual(Observer<? super Long> observer) {
+        IntervalRangeObserver is = new IntervalRangeObserver(observer, start, end);
+        observer.onSubscribe(is);
 
-        Disposable d = scheduler.schedulePeriodicallyDirect(is, initialDelay, period, unit);
+        Scheduler sch = scheduler;
 
-        is.setResource(d);
+        if (sch instanceof TrampolineScheduler) {
+            Worker worker = sch.createWorker();
+            is.setResource(worker);
+            worker.schedulePeriodically(is, initialDelay, period, unit);
+        } else {
+            Disposable d = sch.schedulePeriodicallyDirect(is, initialDelay, period, unit);
+            is.setResource(d);
+        }
     }
 
     static final class IntervalRangeObserver
     extends AtomicReference<Disposable>
     implements Disposable, Runnable {
 
-
         private static final long serialVersionUID = 1891866368734007884L;
 
-        final Observer<? super Long> actual;
+        final Observer<? super Long> downstream;
         final long end;
 
         long count;
 
         IntervalRangeObserver(Observer<? super Long> actual, long start, long end) {
-            this.actual = actual;
+            this.downstream = actual;
             this.count = start;
             this.end = end;
         }
@@ -79,11 +87,11 @@ public final class ObservableIntervalRange extends Observable<Long> {
         public void run() {
             if (!isDisposed()) {
                 long c = count;
-                actual.onNext(c);
+                downstream.onNext(c);
 
                 if (c == end) {
                     DisposableHelper.dispose(this);
-                    actual.onComplete();
+                    downstream.onComplete();
                     return;
                 }
 

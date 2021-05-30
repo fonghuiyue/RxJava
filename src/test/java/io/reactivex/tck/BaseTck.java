@@ -44,7 +44,6 @@ public abstract class BaseTck<T> extends PublisherVerification<T> {
         return Flowable.error(new TestException());
     }
 
-
     @Override
     public long maxElementsFromPublisher() {
         return 1024;
@@ -52,7 +51,7 @@ public abstract class BaseTck<T> extends PublisherVerification<T> {
 
     /**
      * Creates an Iterable with the specified number of elements or an infinite one if
-     * elements > Integer.MAX_VALUE
+     * elements > Integer.MAX_VALUE.
      * @param elements the number of elements to return, Integer.MAX_VALUE means an infinite sequence
      * @return the Iterable
      */

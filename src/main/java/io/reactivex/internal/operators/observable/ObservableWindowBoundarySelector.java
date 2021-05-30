@@ -61,13 +61,15 @@ public final class ObservableWindowBoundarySelector<T, B, V> extends AbstractObs
         final int bufferSize;
         final CompositeDisposable resources;
 
-        Disposable s;
+        Disposable upstream;
 
         final AtomicReference<Disposable> boundary = new AtomicReference<Disposable>();
 
         final List<UnicastSubject<T>> ws;
 
         final AtomicLong windows = new AtomicLong();
+
+        final AtomicBoolean stopWindows = new AtomicBoolean();
 
         WindowBoundaryMainObserver(Observer<? super Observable<T>> actual,
                                             ObservableSource<B> open, Function<? super B, ? extends ObservableSource<V>> close, int bufferSize) {
@@ -81,20 +83,19 @@ public final class ObservableWindowBoundarySelector<T, B, V> extends AbstractObs
         }
 
         @Override
-        public void onSubscribe(Disposable s) {
-            if (DisposableHelper.validate(this.s, s)) {
-                this.s = s;
+        public void onSubscribe(Disposable d) {
+            if (DisposableHelper.validate(this.upstream, d)) {
+                this.upstream = d;
 
-                actual.onSubscribe(this);
+                downstream.onSubscribe(this);
 
-                if (cancelled) {
+                if (stopWindows.get()) {
                     return;
                 }
 
                 OperatorWindowBoundaryOpenObserver<T, B> os = new OperatorWindowBoundaryOpenObserver<T, B>(this);
 
                 if (boundary.compareAndSet(null, os)) {
-                    windows.getAndIncrement();
                     open.subscribe(os);
                 }
             }
@@ -135,7 +136,7 @@ public final class ObservableWindowBoundarySelector<T, B, V> extends AbstractObs
                 resources.dispose();
             }
 
-            actual.onError(t);
+            downstream.onError(t);
         }
 
         @Override
@@ -153,23 +154,28 @@ public final class ObservableWindowBoundarySelector<T, B, V> extends AbstractObs
                 resources.dispose();
             }
 
-            actual.onComplete();
+            downstream.onComplete();
         }
 
         void error(Throwable t) {
-            s.dispose();
+            upstream.dispose();
             resources.dispose();
             onError(t);
         }
 
         @Override
         public void dispose() {
-            cancelled = true;
+            if (stopWindows.compareAndSet(false, true)) {
+                DisposableHelper.dispose(boundary);
+                if (windows.decrementAndGet() == 0) {
+                    upstream.dispose();
+                }
+            }
         }
 
         @Override
         public boolean isDisposed() {
-            return cancelled;
+            return stopWindows.get();
         }
 
         void disposeBoundary() {
@@ -179,7 +185,7 @@ public final class ObservableWindowBoundarySelector<T, B, V> extends AbstractObs
 
         void drainLoop() {
             final MpscLinkedQueue<Object> q = (MpscLinkedQueue<Object>)queue;
-            final Observer<? super Observable<T>> a = actual;
+            final Observer<? super Observable<T>> a = downstream;
             final List<UnicastSubject<T>> ws = this.ws;
             int missed = 1;
 
@@ -229,10 +235,9 @@ public final class ObservableWindowBoundarySelector<T, B, V> extends AbstractObs
                             continue;
                         }
 
-                        if (cancelled) {
+                        if (stopWindows.get()) {
                             continue;
                         }
-
 
                         w = UnicastSubject.create(bufferSize);
 
@@ -245,7 +250,7 @@ public final class ObservableWindowBoundarySelector<T, B, V> extends AbstractObs
                             p = ObjectHelper.requireNonNull(close.apply(wo.open), "The ObservableSource supplied is null");
                         } catch (Throwable e) {
                             Exceptions.throwIfFatal(e);
-                            cancelled = true;
+                            stopWindows.set(true);
                             a.onError(e);
                             continue;
                         }
@@ -338,12 +343,8 @@ public final class ObservableWindowBoundarySelector<T, B, V> extends AbstractObs
 
         @Override
         public void onNext(V t) {
-            if (done) {
-                return;
-            }
-            done = true;
             dispose();
-            parent.close(this);
+            onComplete();
         }
 
         @Override

@@ -21,6 +21,7 @@ import io.reactivex.*;
 import io.reactivex.exceptions.Exceptions;
 import io.reactivex.functions.BiFunction;
 import io.reactivex.internal.functions.ObjectHelper;
+import io.reactivex.internal.fuseable.ConditionalSubscriber;
 import io.reactivex.internal.subscriptions.SubscriptionHelper;
 import io.reactivex.subscribers.SerializedSubscriber;
 
@@ -45,30 +46,40 @@ public final class FlowableWithLatestFrom<T, U, R> extends AbstractFlowableWithU
         source.subscribe(wlf);
     }
 
-    static final class WithLatestFromSubscriber<T, U, R> extends AtomicReference<U> implements FlowableSubscriber<T>, Subscription {
+    static final class WithLatestFromSubscriber<T, U, R> extends AtomicReference<U>
+    implements ConditionalSubscriber<T>, Subscription {
 
         private static final long serialVersionUID = -312246233408980075L;
 
-        final Subscriber<? super R> actual;
+        final Subscriber<? super R> downstream;
+
         final BiFunction<? super T, ? super U, ? extends R> combiner;
 
-        final AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+        final AtomicReference<Subscription> upstream = new AtomicReference<Subscription>();
 
         final AtomicLong requested = new AtomicLong();
 
         final AtomicReference<Subscription> other = new AtomicReference<Subscription>();
 
         WithLatestFromSubscriber(Subscriber<? super R> actual, BiFunction<? super T, ? super U, ? extends R> combiner) {
-            this.actual = actual;
+            this.downstream = actual;
             this.combiner = combiner;
         }
+
         @Override
         public void onSubscribe(Subscription s) {
-            SubscriptionHelper.deferredSetOnce(this.s, requested, s);
+            SubscriptionHelper.deferredSetOnce(this.upstream, requested, s);
         }
 
         @Override
         public void onNext(T t) {
+            if (!tryOnNext(t)) {
+                upstream.get().request(1);
+            }
+        }
+
+        @Override
+        public boolean tryOnNext(T t) {
             U u = get();
             if (u != null) {
                 R r;
@@ -77,33 +88,36 @@ public final class FlowableWithLatestFrom<T, U, R> extends AbstractFlowableWithU
                 } catch (Throwable e) {
                     Exceptions.throwIfFatal(e);
                     cancel();
-                    actual.onError(e);
-                    return;
+                    downstream.onError(e);
+                    return false;
                 }
-                actual.onNext(r);
+                downstream.onNext(r);
+                return true;
+            } else {
+                return false;
             }
         }
 
         @Override
         public void onError(Throwable t) {
             SubscriptionHelper.cancel(other);
-            actual.onError(t);
+            downstream.onError(t);
         }
 
         @Override
         public void onComplete() {
             SubscriptionHelper.cancel(other);
-            actual.onComplete();
+            downstream.onComplete();
         }
 
         @Override
         public void request(long n) {
-            SubscriptionHelper.deferredRequest(s, requested, n);
+            SubscriptionHelper.deferredRequest(upstream, requested, n);
         }
 
         @Override
         public void cancel() {
-            SubscriptionHelper.cancel(s);
+            SubscriptionHelper.cancel(upstream);
             SubscriptionHelper.cancel(other);
         }
 
@@ -112,8 +126,8 @@ public final class FlowableWithLatestFrom<T, U, R> extends AbstractFlowableWithU
         }
 
         public void otherError(Throwable e) {
-            SubscriptionHelper.cancel(s);
-            actual.onError(e);
+            SubscriptionHelper.cancel(upstream);
+            downstream.onError(e);
         }
     }
 

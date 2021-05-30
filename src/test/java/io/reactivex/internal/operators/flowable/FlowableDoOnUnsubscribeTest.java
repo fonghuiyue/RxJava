@@ -24,6 +24,7 @@ import org.junit.Test;
 import io.reactivex.Flowable;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.*;
+import io.reactivex.processors.BehaviorProcessor;
 import io.reactivex.subscribers.TestSubscriber;
 
 public class FlowableDoOnUnsubscribeTest {
@@ -80,8 +81,6 @@ public class FlowableDoOnUnsubscribeTest {
         for (int i = 0; i < subCount; ++i) {
             subscriptions.get(i).dispose();
             // Test that unsubscribe() method is not affected in any way
-            // FIXME no longer valid
-//            subscribers.get(i).assertUnsubscribed();
         }
 
         upperLatch.await();
@@ -143,13 +142,31 @@ public class FlowableDoOnUnsubscribeTest {
         for (int i = 0; i < subCount; ++i) {
             subscriptions.get(i).dispose();
             // Test that unsubscribe() method is not affected in any way
-            // FIXME no longer valid
-//            subscribers.get(i).assertUnsubscribed();
         }
 
         upperLatch.await();
         lowerLatch.await();
         assertEquals("There should exactly 1 un-subscription events for upper stream", 1, upperCount.get());
         assertEquals("There should exactly 1 un-subscription events for lower stream", 1, lowerCount.get());
+    }
+
+    @Test
+    public void noReentrantDispose() {
+
+        final AtomicInteger cancelCalled = new AtomicInteger();
+
+        final BehaviorProcessor<Integer> p = BehaviorProcessor.create();
+        p.doOnCancel(new Action() {
+            @Override
+            public void run() throws Exception {
+                cancelCalled.incrementAndGet();
+                p.onNext(2);
+            }
+        })
+        .firstOrError()
+        .subscribe()
+        .dispose();
+
+        assertEquals(1, cancelCalled.get());
     }
 }

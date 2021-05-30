@@ -26,7 +26,6 @@ import io.reactivex.exceptions.TestException;
 import io.reactivex.functions.Cancellable;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
-import io.reactivex.schedulers.Schedulers;
 
 public class ObservableCreateTest {
 
@@ -438,18 +437,18 @@ public class ObservableCreateTest {
                 Runnable r1 = new Runnable() {
                     @Override
                     public void run() {
-                        for (int i = 0; i < 1000; i++) {
+                        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
                             f.onNext(1);
                         }
                     }
                 };
 
-                TestHelper.race(r1, r1, Schedulers.single());
+                TestHelper.race(r1, r1);
             }
         })
-        .take(1000)
+        .take(TestHelper.RACE_DEFAULT_LOOPS)
         .test()
-        .assertSubscribed().assertValueCount(1000).assertComplete().assertNoErrors();
+        .assertSubscribed().assertValueCount(TestHelper.RACE_DEFAULT_LOOPS).assertComplete().assertNoErrors();
     }
 
     @Test
@@ -478,7 +477,7 @@ public class ObservableCreateTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
             }
         })
         .test()
@@ -512,7 +511,7 @@ public class ObservableCreateTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
             }
         })
         .test()
@@ -546,14 +545,14 @@ public class ObservableCreateTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
             }
         });
 
         List<Throwable> errors = TestHelper.trackPluginErrors();
 
         try {
-            for (int i = 0; i < 500; i++) {
+            for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
                 source
                 .test()
                 .assertFailure(Throwable.class);
@@ -585,14 +584,74 @@ public class ObservableCreateTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
             }
         });
 
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             source
             .test()
             .assertResult();
         }
+    }
+
+    @Test
+    public void tryOnError() {
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            final Boolean[] response = { null };
+            Observable.create(new ObservableOnSubscribe<Object>() {
+                @Override
+                public void subscribe(ObservableEmitter<Object> e) throws Exception {
+                    e.onNext(1);
+                    response[0] = e.tryOnError(new TestException());
+                }
+            })
+            .take(1)
+            .test()
+            .assertResult(1);
+
+            assertFalse(response[0]);
+
+            assertTrue(errors.toString(), errors.isEmpty());
+        } finally {
+            RxJavaPlugins.reset();
+        }
+    }
+
+    @Test
+    public void tryOnErrorSerialized() {
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            final Boolean[] response = { null };
+            Observable.create(new ObservableOnSubscribe<Object>() {
+                @Override
+                public void subscribe(ObservableEmitter<Object> e) throws Exception {
+                    e = e.serialize();
+                    e.onNext(1);
+                    response[0] = e.tryOnError(new TestException());
+                }
+            })
+            .take(1)
+            .test()
+            .assertResult(1);
+
+            assertFalse(response[0]);
+
+            assertTrue(errors.toString(), errors.isEmpty());
+        } finally {
+            RxJavaPlugins.reset();
+        }
+    }
+
+    @Test
+    public void emitterHasToString() {
+        Observable.create(new ObservableOnSubscribe<Object>() {
+            @Override
+            public void subscribe(ObservableEmitter<Object> emitter) throws Exception {
+                assertTrue(emitter.toString().contains(ObservableCreate.CreateEmitter.class.getSimpleName()));
+                assertTrue(emitter.serialize().toString().contains(ObservableCreate.CreateEmitter.class.getSimpleName()));
+            }
+        }).test().assertEmpty();
     }
 }

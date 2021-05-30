@@ -48,7 +48,7 @@ public class FlowableCovarianceTest {
 
     @Test
     public void testSortedList() {
-        Comparator<Media> SORT_FUNCTION = new Comparator<Media>() {
+        Comparator<Media> sortFunction = new Comparator<Media>() {
             @Override
             public int compare(Media t1, Media t2) {
                 return 1;
@@ -56,12 +56,12 @@ public class FlowableCovarianceTest {
         };
 
         // this one would work without the covariance generics
-        Flowable<Media> o = Flowable.just(new Movie(), new TVSeason(), new Album());
-        o.toSortedList(SORT_FUNCTION);
+        Flowable<Media> f = Flowable.just(new Movie(), new TVSeason(), new Album());
+        f.toSortedList(sortFunction);
 
         // this one would NOT work without the covariance generics
-        Flowable<Movie> o2 = Flowable.just(new Movie(), new ActionMovie(), new HorrorMovie());
-        o2.toSortedList(SORT_FUNCTION);
+        Flowable<Movie> f2 = Flowable.just(new Movie(), new ActionMovie(), new HorrorMovie());
+        f2.toSortedList(sortFunction);
     }
 
     @Test

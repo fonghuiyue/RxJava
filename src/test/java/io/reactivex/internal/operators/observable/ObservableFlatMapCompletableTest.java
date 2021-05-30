@@ -24,7 +24,7 @@ import io.reactivex.*;
 import io.reactivex.disposables.*;
 import io.reactivex.exceptions.*;
 import io.reactivex.functions.Function;
-import io.reactivex.internal.fuseable.QueueDisposable;
+import io.reactivex.internal.fuseable.*;
 import io.reactivex.observers.*;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subjects.PublishSubject;
@@ -166,10 +166,9 @@ public class ObservableFlatMapCompletableTest {
         .assertFailure(TestException.class);
     }
 
-
     @Test
     public void fusedObservable() {
-        TestObserver<Integer> to = ObserverFusion.newTest(QueueDisposable.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
         Observable.range(1, 10)
         .flatMapCompletable(new Function<Integer, CompletableSource>() {
@@ -182,7 +181,7 @@ public class ObservableFlatMapCompletableTest {
 
         to
         .assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueDisposable.ASYNC))
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult();
     }
 
@@ -332,10 +331,9 @@ public class ObservableFlatMapCompletableTest {
         .assertFailure(TestException.class);
     }
 
-
     @Test
     public void fused() {
-        TestObserver<Integer> to = ObserverFusion.newTest(QueueDisposable.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
         Observable.range(1, 10)
         .flatMapCompletable(new Function<Integer, CompletableSource>() {
@@ -349,7 +347,7 @@ public class ObservableFlatMapCompletableTest {
 
         to
         .assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueDisposable.ASYNC))
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult();
     }
 
@@ -372,14 +370,14 @@ public class ObservableFlatMapCompletableTest {
             public CompletableSource apply(Integer v) throws Exception {
                 return new Completable() {
                     @Override
-                    protected void subscribeActual(CompletableObserver s) {
-                        s.onSubscribe(Disposables.empty());
+                    protected void subscribeActual(CompletableObserver observer) {
+                        observer.onSubscribe(Disposables.empty());
 
-                        assertFalse(((Disposable)s).isDisposed());
+                        assertFalse(((Disposable)observer).isDisposed());
 
-                        ((Disposable)s).dispose();
+                        ((Disposable)observer).dispose();
 
-                        assertTrue(((Disposable)s).isDisposed());
+                        assertTrue(((Disposable)observer).isDisposed());
                     }
                 };
             }
@@ -447,14 +445,14 @@ public class ObservableFlatMapCompletableTest {
             public CompletableSource apply(Integer v) throws Exception {
                 return new Completable() {
                     @Override
-                    protected void subscribeActual(CompletableObserver s) {
-                        s.onSubscribe(Disposables.empty());
+                    protected void subscribeActual(CompletableObserver observer) {
+                        observer.onSubscribe(Disposables.empty());
 
-                        assertFalse(((Disposable)s).isDisposed());
+                        assertFalse(((Disposable)observer).isDisposed());
 
-                        ((Disposable)s).dispose();
+                        ((Disposable)observer).dispose();
 
-                        assertTrue(((Disposable)s).isDisposed());
+                        assertTrue(((Disposable)observer).isDisposed());
                     }
                 };
             }

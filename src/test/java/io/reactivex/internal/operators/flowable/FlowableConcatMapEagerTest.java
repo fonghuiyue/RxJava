@@ -588,11 +588,11 @@ public class FlowableConcatMapEagerTest {
 
     @Test
     public void testReentrantWork() {
-        final PublishProcessor<Integer> subject = PublishProcessor.create();
+        final PublishProcessor<Integer> processor = PublishProcessor.create();
 
         final AtomicBoolean once = new AtomicBoolean();
 
-        subject.concatMapEager(new Function<Integer, Flowable<Integer>>() {
+        processor.concatMapEager(new Function<Integer, Flowable<Integer>>() {
             @Override
             public Flowable<Integer> apply(Integer t) {
                 return Flowable.just(t);
@@ -602,13 +602,13 @@ public class FlowableConcatMapEagerTest {
             @Override
             public void accept(Integer t) {
                 if (once.compareAndSet(false, true)) {
-                    subject.onNext(2);
+                    processor.onNext(2);
                 }
             }
         })
         .subscribe(ts);
 
-        subject.onNext(1);
+        processor.onNext(1);
 
         ts.assertNoErrors();
         ts.assertNotComplete();
@@ -654,7 +654,6 @@ public class FlowableConcatMapEagerTest {
         ts.assertComplete();
         ts.assertValue(null);
     }
-
 
     @Test
     public void testMaxConcurrent5() {
@@ -856,49 +855,49 @@ public class FlowableConcatMapEagerTest {
 
     @Test
     public void innerOuterRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             List<Throwable> errors = TestHelper.trackPluginErrors();
             try {
-                final PublishProcessor<Integer> ps1 = PublishProcessor.create();
-                final PublishProcessor<Integer> ps2 = PublishProcessor.create();
+                final PublishProcessor<Integer> pp1 = PublishProcessor.create();
+                final PublishProcessor<Integer> pp2 = PublishProcessor.create();
 
-                TestSubscriber<Integer> to = ps1.concatMapEager(new Function<Integer, Flowable<Integer>>() {
+                TestSubscriber<Integer> ts = pp1.concatMapEager(new Function<Integer, Flowable<Integer>>() {
                     @Override
                     public Flowable<Integer> apply(Integer v) throws Exception {
-                        return ps2;
+                        return pp2;
                     }
                 }).test();
 
                 final TestException ex1 = new TestException();
                 final TestException ex2 = new TestException();
 
-                ps1.onNext(1);
+                pp1.onNext(1);
 
                 Runnable r1 = new Runnable() {
                     @Override
                     public void run() {
-                        ps1.onError(ex1);
+                        pp1.onError(ex1);
                     }
                 };
                 Runnable r2 = new Runnable() {
                     @Override
                     public void run() {
-                        ps2.onError(ex2);
+                        pp2.onError(ex2);
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
-                to.assertSubscribed().assertNoValues().assertNotComplete();
+                ts.assertSubscribed().assertNoValues().assertNotComplete();
 
-                Throwable ex = to.errors().get(0);
+                Throwable ex = ts.errors().get(0);
 
                 if (ex instanceof CompositeException) {
-                    List<Throwable> es = TestHelper.errorList(to);
+                    List<Throwable> es = TestHelper.errorList(ts);
                     TestHelper.assertError(es, 0, TestException.class);
                     TestHelper.assertError(es, 1, TestException.class);
                 } else {
-                    to.assertError(TestException.class);
+                    ts.assertError(TestException.class);
                     if (!errors.isEmpty()) {
                         TestHelper.assertUndeliverable(errors, 0, TestException.class);
                     }
@@ -943,7 +942,7 @@ public class FlowableConcatMapEagerTest {
         final UnicastProcessor<Integer> us = UnicastProcessor.create();
         us.onNext(1);
 
-        TestSubscriber<Integer> to = new TestSubscriber<Integer>() {
+        TestSubscriber<Integer> ts = new TestSubscriber<Integer>() {
             @Override
             public void onNext(Integer t) {
                 super.onNext(t);
@@ -958,18 +957,18 @@ public class FlowableConcatMapEagerTest {
                 return us;
             }
         }, 1, 128)
-        .subscribe(to);
+        .subscribe(ts);
 
-        to
+        ts
         .assertFailure(TestException.class, 1);
     }
 
     @Test
     public void nextCancelRace() {
-        for (int i = 0; i < 500; i++) {
-            final PublishProcessor<Integer> ps1 = PublishProcessor.create();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final PublishProcessor<Integer> pp1 = PublishProcessor.create();
 
-            final TestSubscriber<Integer> to = ps1.concatMapEager(new Function<Integer, Flowable<Integer>>() {
+            final TestSubscriber<Integer> ts = pp1.concatMapEager(new Function<Integer, Flowable<Integer>>() {
                 @Override
                 public Flowable<Integer> apply(Integer v) throws Exception {
                     return Flowable.never();
@@ -979,37 +978,37 @@ public class FlowableConcatMapEagerTest {
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    ps1.onNext(1);
+                    pp1.onNext(1);
                 }
             };
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    to.cancel();
+                    ts.cancel();
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
-            to.assertEmpty();
+            ts.assertEmpty();
         }
     }
 
     @Test
     public void mapperCancels() {
-        final TestSubscriber<Integer> to = new TestSubscriber<Integer>();
+        final TestSubscriber<Integer> ts = new TestSubscriber<Integer>();
 
         Flowable.just(1).hide()
         .concatMapEager(new Function<Integer, Flowable<Integer>>() {
             @Override
             public Flowable<Integer> apply(Integer v) throws Exception {
-                to.cancel();
+                ts.cancel();
                 return Flowable.never();
             }
         }, 1, 128)
-        .subscribe(to);
+        .subscribe(ts);
 
-        to.assertEmpty();
+        ts.assertEmpty();
     }
 
     @Test
@@ -1051,8 +1050,8 @@ public class FlowableConcatMapEagerTest {
     public void doubleOnSubscribe() {
         TestHelper.checkDoubleOnSubscribeFlowable(new Function<Flowable<Object>, Flowable<Object>>() {
             @Override
-            public Flowable<Object> apply(Flowable<Object> o) throws Exception {
-                return o.concatMapEager(new Function<Object, Flowable<Object>>() {
+            public Flowable<Object> apply(Flowable<Object> f) throws Exception {
+                return f.concatMapEager(new Function<Object, Flowable<Object>>() {
                     @Override
                     public Flowable<Object> apply(Object v) throws Exception {
                         return Flowable.just(v);
@@ -1136,7 +1135,7 @@ public class FlowableConcatMapEagerTest {
 
     @Test
     public void drainCancelRaceOnEmpty() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishProcessor<Integer> pp = PublishProcessor.create();
 
             final TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
@@ -1192,5 +1191,179 @@ public class FlowableConcatMapEagerTest {
         .awaitDone(5, TimeUnit.SECONDS)
         .assertResult(1, 2, 3, 4, 5)
         ;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void maxConcurrencyOf2() {
+        List<Integer>[] list = new ArrayList[100];
+        for (int i = 0; i < 100; i++) {
+            List<Integer> lst = new ArrayList<Integer>();
+            list[i] = lst;
+            for (int k = 1; k <= 10; k++) {
+                lst.add((i) * 10 + k);
+            }
+        }
+
+        Flowable.range(1, 1000)
+        .buffer(10)
+        .concatMapEager(new Function<List<Integer>, Flowable<List<Integer>>>() {
+            @Override
+            public Flowable<List<Integer>> apply(List<Integer> v)
+                    throws Exception {
+                return Flowable.just(v)
+                        .subscribeOn(Schedulers.io())
+                        .doOnNext(new Consumer<List<Integer>>() {
+                            @Override
+                            public void accept(List<Integer> v)
+                                    throws Exception {
+                                Thread.sleep(new Random().nextInt(20));
+                            }
+                        });
+            }
+        }
+                , 2, 3)
+        .test()
+        .awaitDone(5, TimeUnit.SECONDS)
+        .assertResult(list);
+    }
+
+    @Test
+    public void arrayDelayErrorDefault() {
+        PublishProcessor<Integer> pp1 = PublishProcessor.create();
+        PublishProcessor<Integer> pp2 = PublishProcessor.create();
+        PublishProcessor<Integer> pp3 = PublishProcessor.create();
+
+        @SuppressWarnings("unchecked")
+        TestSubscriber<Integer> ts = Flowable.concatArrayEagerDelayError(pp1, pp2, pp3)
+        .test();
+
+        ts.assertEmpty();
+
+        assertTrue(pp1.hasSubscribers());
+        assertTrue(pp2.hasSubscribers());
+        assertTrue(pp3.hasSubscribers());
+
+        pp2.onNext(2);
+        pp2.onComplete();
+
+        ts.assertEmpty();
+
+        pp1.onNext(1);
+
+        ts.assertValuesOnly(1);
+
+        pp1.onComplete();
+
+        ts.assertValuesOnly(1, 2);
+
+        pp3.onComplete();
+
+        ts.assertResult(1, 2);
+    }
+
+    @Test
+    public void arrayDelayErrorMaxConcurrency() {
+        PublishProcessor<Integer> pp1 = PublishProcessor.create();
+        PublishProcessor<Integer> pp2 = PublishProcessor.create();
+        PublishProcessor<Integer> pp3 = PublishProcessor.create();
+
+        @SuppressWarnings("unchecked")
+        TestSubscriber<Integer> ts = Flowable.concatArrayEagerDelayError(2, 2, pp1, pp2, pp3)
+        .test();
+
+        ts.assertEmpty();
+
+        assertTrue(pp1.hasSubscribers());
+        assertTrue(pp2.hasSubscribers());
+        assertFalse(pp3.hasSubscribers());
+
+        pp2.onNext(2);
+        pp2.onComplete();
+
+        ts.assertEmpty();
+
+        pp1.onNext(1);
+
+        ts.assertValuesOnly(1);
+
+        pp1.onComplete();
+
+        assertTrue(pp3.hasSubscribers());
+
+        ts.assertValuesOnly(1, 2);
+
+        pp3.onComplete();
+
+        ts.assertResult(1, 2);
+    }
+
+    @Test
+    public void arrayDelayErrorMaxConcurrencyErrorDelayed() {
+        PublishProcessor<Integer> pp1 = PublishProcessor.create();
+        PublishProcessor<Integer> pp2 = PublishProcessor.create();
+        PublishProcessor<Integer> pp3 = PublishProcessor.create();
+
+        @SuppressWarnings("unchecked")
+        TestSubscriber<Integer> ts = Flowable.concatArrayEagerDelayError(2, 2, pp1, pp2, pp3)
+        .test();
+
+        ts.assertEmpty();
+
+        assertTrue(pp1.hasSubscribers());
+        assertTrue(pp2.hasSubscribers());
+        assertFalse(pp3.hasSubscribers());
+
+        pp2.onNext(2);
+        pp2.onError(new TestException());
+
+        ts.assertEmpty();
+
+        pp1.onNext(1);
+
+        ts.assertValuesOnly(1);
+
+        pp1.onComplete();
+
+        assertTrue(pp3.hasSubscribers());
+
+        ts.assertValuesOnly(1, 2);
+
+        pp3.onComplete();
+
+        ts.assertFailure(TestException.class, 1, 2);
+    }
+
+    @Test
+    public void cancelActive() {
+        PublishProcessor<Integer> pp1 = PublishProcessor.create();
+        PublishProcessor<Integer> pp2 = PublishProcessor.create();
+
+        TestSubscriber<Integer> ts = Flowable
+                .concatEager(Flowable.just(pp1, pp2))
+                .test();
+
+        assertTrue(pp1.hasSubscribers());
+        assertTrue(pp2.hasSubscribers());
+
+        ts.cancel();
+
+        assertFalse(pp1.hasSubscribers());
+        assertFalse(pp2.hasSubscribers());
+    }
+
+    @Test
+    public void cancelNoInnerYet() {
+        PublishProcessor<Flowable<Integer>> pp1 = PublishProcessor.create();
+
+        TestSubscriber<Integer> ts = Flowable
+                .concatEager(pp1)
+                .test();
+
+        assertTrue(pp1.hasSubscribers());
+
+        ts.cancel();
+
+        assertFalse(pp1.hasSubscribers());
     }
 }

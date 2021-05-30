@@ -38,10 +38,9 @@ import io.reactivex.internal.util.EndConsumerHelper;
  * If for some reason this can't be avoided, use {@link io.reactivex.Observable#safeSubscribe(io.reactivex.Observer)}
  * instead of the standard {@code subscribe()} method.
  *
- * <p>Example<code><pre>
- * Disposable d =
- *     Observable.range(1, 5)
- *     .subscribeWith(new DefaultObserver&lt;Integer>() {
+ * <p>Example<pre><code>
+ * Observable.range(1, 5)
+ *     .subscribe(new DefaultObserver&lt;Integer&gt;() {
  *         &#64;Override public void onStart() {
  *             System.out.println("Start!");
  *         }
@@ -58,18 +57,18 @@ import io.reactivex.internal.util.EndConsumerHelper;
  *             System.out.println("Done!");
  *         }
  *     });
- * // ...
- * d.dispose();
- * </pre></code>
+ * </code></pre>
  *
  * @param <T> the value type
  */
 public abstract class DefaultObserver<T> implements Observer<T> {
-    private Disposable s;
+
+    private Disposable upstream;
+
     @Override
-    public final void onSubscribe(@NonNull Disposable s) {
-        if (EndConsumerHelper.validate(this.s, s, getClass())) {
-            this.s = s;
+    public final void onSubscribe(@NonNull Disposable d) {
+        if (EndConsumerHelper.validate(this.upstream, d, getClass())) {
+            this.upstream = d;
             onStart();
         }
     }
@@ -78,9 +77,9 @@ public abstract class DefaultObserver<T> implements Observer<T> {
      * Cancels the upstream's disposable.
      */
     protected final void cancel() {
-        Disposable s = this.s;
-        this.s = DisposableHelper.DISPOSED;
-        s.dispose();
+        Disposable upstream = this.upstream;
+        this.upstream = DisposableHelper.DISPOSED;
+        upstream.dispose();
     }
     /**
      * Called once the subscription has been set on this observer; override this

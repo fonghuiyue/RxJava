@@ -16,6 +16,7 @@ package io.reactivex.internal.operators.completable;
 import static org.junit.Assert.*;
 
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.Test;
 import org.reactivestreams.*;
@@ -23,7 +24,7 @@ import org.reactivestreams.*;
 import io.reactivex.*;
 import io.reactivex.disposables.Disposables;
 import io.reactivex.exceptions.*;
-import io.reactivex.functions.Function;
+import io.reactivex.functions.*;
 import io.reactivex.internal.subscriptions.BooleanSubscription;
 import io.reactivex.observers.*;
 import io.reactivex.plugins.RxJavaPlugins;
@@ -34,21 +35,28 @@ public class CompletableConcatTest {
 
     @Test
     public void overflowReported() {
-        Completable.concat(
-            Flowable.fromPublisher(new Publisher<Completable>() {
-                @Override
-                public void subscribe(Subscriber<? super Completable> s) {
-                    s.onSubscribe(new BooleanSubscription());
-                    s.onNext(Completable.never());
-                    s.onNext(Completable.never());
-                    s.onNext(Completable.never());
-                    s.onNext(Completable.never());
-                    s.onComplete();
-                }
-            }), 1
-        )
-        .test()
-        .assertFailure(MissingBackpressureException.class);
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            Completable.concat(
+                Flowable.fromPublisher(new Publisher<Completable>() {
+                    @Override
+                    public void subscribe(Subscriber<? super Completable> s) {
+                        s.onSubscribe(new BooleanSubscription());
+                        s.onNext(Completable.never());
+                        s.onNext(Completable.never());
+                        s.onNext(Completable.never());
+                        s.onNext(Completable.never());
+                        s.onComplete();
+                    }
+                }), 1
+            )
+            .test()
+            .assertFailure(MissingBackpressureException.class);
+
+            TestHelper.assertError(errors, 0, MissingBackpressureException.class);
+        } finally {
+            RxJavaPlugins.reset();
+        }
     }
 
     @Test
@@ -68,38 +76,38 @@ public class CompletableConcatTest {
 
     @Test
     public void errorRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             List<Throwable> errors = TestHelper.trackPluginErrors();
 
             try {
-                final PublishProcessor<Integer> ps1 = PublishProcessor.create();
-                final PublishProcessor<Integer> ps2 = PublishProcessor.create();
+                final PublishProcessor<Integer> pp1 = PublishProcessor.create();
+                final PublishProcessor<Integer> pp2 = PublishProcessor.create();
 
-                TestObserver<Void> to = Completable.concat(ps1.map(new Function<Integer, Completable>() {
+                TestObserver<Void> to = Completable.concat(pp1.map(new Function<Integer, Completable>() {
                     @Override
                     public Completable apply(Integer v) throws Exception {
-                        return ps2.ignoreElements();
+                        return pp2.ignoreElements();
                     }
                 })).test();
 
-                ps1.onNext(1);
+                pp1.onNext(1);
 
                 final TestException ex = new TestException();
 
                 Runnable r1 = new Runnable() {
                     @Override
                     public void run() {
-                        ps1.onError(ex);
+                        pp1.onError(ex);
                     }
                 };
                 Runnable r2 = new Runnable() {
                     @Override
                     public void run() {
-                        ps2.onError(ex);
+                        pp2.onError(ex);
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
                 to.assertFailure(TestException.class);
 
@@ -162,10 +170,10 @@ public class CompletableConcatTest {
 
         Completable.concatArray(new Completable() {
             @Override
-            protected void subscribeActual(CompletableObserver s) {
-                s.onSubscribe(Disposables.empty());
+            protected void subscribeActual(CompletableObserver observer) {
+                observer.onSubscribe(Disposables.empty());
                 to.cancel();
-                s.onComplete();
+                observer.onComplete();
             }
         }, Completable.complete())
         .subscribe(to);
@@ -186,10 +194,10 @@ public class CompletableConcatTest {
 
         Completable.concat(Arrays.asList(new Completable() {
             @Override
-            protected void subscribeActual(CompletableObserver s) {
-                s.onSubscribe(Disposables.empty());
+            protected void subscribeActual(CompletableObserver observer) {
+                observer.onSubscribe(Disposables.empty());
                 to.cancel();
-                s.onComplete();
+                observer.onComplete();
             }
         }, Completable.complete()))
         .subscribe(to);
@@ -202,7 +210,7 @@ public class CompletableConcatTest {
         Completable[] a = new Completable[1024];
         Arrays.fill(a, Completable.complete());
 
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
 
             final Completable c = Completable.concatArray(a);
 
@@ -222,7 +230,7 @@ public class CompletableConcatTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 
@@ -231,7 +239,7 @@ public class CompletableConcatTest {
         Completable[] a = new Completable[1024];
         Arrays.fill(a, Completable.complete());
 
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
 
             final Completable c = Completable.concat(Arrays.asList(a));
 
@@ -251,7 +259,44 @@ public class CompletableConcatTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
+        }
+    }
+
+    @Test
+    public void noInterrupt() throws InterruptedException {
+        for (int k = 0; k < 100; k++) {
+            final int count = 10;
+            final CountDownLatch latch = new CountDownLatch(count);
+            final boolean[] interrupted = { false };
+
+            for (int i = 0; i < count; i++) {
+                Completable c0 = Completable.fromAction(new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        try {
+                            Thread.sleep(30);
+                        } catch (InterruptedException e) {
+                            System.out.println("Interrupted! " + Thread.currentThread());
+                            interrupted[0] = true;
+                        }
+                    }
+                });
+                Completable.concat(Arrays.asList(Completable.complete()
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(Schedulers.io()),
+                    c0)
+                )
+                .subscribe(new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        latch.countDown();
+                    }
+                });
+            }
+
+            latch.await();
+            assertFalse("The second Completable was interrupted!", interrupted[0]);
         }
     }
 }

@@ -15,6 +15,7 @@ package io.reactivex.internal.operators.observable;
 
 import io.reactivex.*;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.internal.disposables.DisposableHelper;
 
 public final class ObservableSkip<T> extends AbstractObservableWithUpstream<T, T> {
     final long n;
@@ -24,25 +25,27 @@ public final class ObservableSkip<T> extends AbstractObservableWithUpstream<T, T
     }
 
     @Override
-    public void subscribeActual(Observer<? super T> s) {
-        source.subscribe(new SkipObserver<T>(s, n));
+    public void subscribeActual(Observer<? super T> observer) {
+        source.subscribe(new SkipObserver<T>(observer, n));
     }
 
     static final class SkipObserver<T> implements Observer<T>, Disposable {
-        final Observer<? super T> actual;
+        final Observer<? super T> downstream;
         long remaining;
 
-        Disposable d;
+        Disposable upstream;
 
         SkipObserver(Observer<? super T> actual, long n) {
-            this.actual = actual;
+            this.downstream = actual;
             this.remaining = n;
         }
 
         @Override
-        public void onSubscribe(Disposable s) {
-            this.d = s;
-            actual.onSubscribe(this);
+        public void onSubscribe(Disposable d) {
+            if (DisposableHelper.validate(this.upstream, d)) {
+                this.upstream = d;
+                downstream.onSubscribe(this);
+            }
         }
 
         @Override
@@ -50,28 +53,28 @@ public final class ObservableSkip<T> extends AbstractObservableWithUpstream<T, T
             if (remaining != 0L) {
                 remaining--;
             } else {
-                actual.onNext(t);
+                downstream.onNext(t);
             }
         }
 
         @Override
         public void onError(Throwable t) {
-            actual.onError(t);
+            downstream.onError(t);
         }
 
         @Override
         public void onComplete() {
-            actual.onComplete();
+            downstream.onComplete();
         }
 
         @Override
         public void dispose() {
-            d.dispose();
+            upstream.dispose();
         }
 
         @Override
         public boolean isDisposed() {
-            return d.isDisposed();
+            return upstream.isDisposed();
         }
     }
 }

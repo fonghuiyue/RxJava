@@ -19,6 +19,7 @@ import org.junit.Test;
 
 import io.reactivex.*;
 import io.reactivex.disposables.Disposables;
+import io.reactivex.exceptions.*;
 import io.reactivex.functions.Function;
 import io.reactivex.internal.functions.Functions;
 import io.reactivex.internal.operators.observable.ObservableMapNotification.MapNotificationObserver;
@@ -27,7 +28,7 @@ import io.reactivex.observers.TestObserver;
 public class ObservableMapNotificationTest {
     @Test
     public void testJust() {
-        TestObserver<Object> ts = new TestObserver<Object>();
+        TestObserver<Object> to = new TestObserver<Object>();
         Observable.just(1)
         .flatMap(
                 new Function<Integer, Observable<Object>>() {
@@ -48,11 +49,11 @@ public class ObservableMapNotificationTest {
                         return Observable.never();
                     }
                 }
-        ).subscribe(ts);
+        ).subscribe(to);
 
-        ts.assertNoErrors();
-        ts.assertNotComplete();
-        ts.assertValue(2);
+        to.assertNoErrors();
+        to.assertNotComplete();
+        to.assertValue(2);
     }
 
     @Test
@@ -84,5 +85,23 @@ public class ObservableMapNotificationTest {
                 );
             }
         });
+    }
+
+    @Test
+    public void onErrorCrash() {
+        TestObserver<Integer> to = Observable.<Integer>error(new TestException("Outer"))
+        .flatMap(Functions.justFunction(Observable.just(1)),
+                new Function<Throwable, Observable<Integer>>() {
+                    @Override
+                    public Observable<Integer> apply(Throwable t) throws Exception {
+                        throw new TestException("Inner");
+                    }
+                },
+                Functions.justCallable(Observable.just(3)))
+        .test()
+        .assertFailure(CompositeException.class);
+
+        TestHelper.assertError(to, 0, TestException.class, "Outer");
+        TestHelper.assertError(to, 1, TestException.class, "Inner");
     }
 }

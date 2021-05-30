@@ -14,17 +14,21 @@
 package io.reactivex.internal.operators.maybe;
 
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import io.reactivex.disposables.Disposable;
 import org.junit.Test;
 
 import io.reactivex.*;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.schedulers.Schedulers;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 public class MaybeFromCallableTest {
     @Test(expected = NullPointerException.class)
@@ -138,7 +142,7 @@ public class MaybeFromCallableTest {
                 @Override
                 public Integer call() throws Exception {
                     cdl1.countDown();
-                    cdl2.await();
+                    cdl2.await(5, TimeUnit.SECONDS);
                     return 1;
                 }
             }).subscribeOn(Schedulers.single()).test();
@@ -146,8 +150,6 @@ public class MaybeFromCallableTest {
             assertTrue(cdl1.await(5, TimeUnit.SECONDS));
 
             to.cancel();
-
-            cdl2.countDown();
 
             int timeout = 10;
 
@@ -159,5 +161,58 @@ public class MaybeFromCallableTest {
         } finally {
             RxJavaPlugins.reset();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotDeliverResultIfSubscriberUnsubscribedBeforeEmission() throws Exception {
+        Callable<String> func = mock(Callable.class);
+
+        final CountDownLatch funcLatch = new CountDownLatch(1);
+        final CountDownLatch observerLatch = new CountDownLatch(1);
+
+        when(func.call()).thenAnswer(new Answer<String>() {
+            @Override
+            public String answer(InvocationOnMock invocation) throws Throwable {
+                observerLatch.countDown();
+
+                try {
+                    funcLatch.await();
+                } catch (InterruptedException e) {
+                    // It's okay, unsubscription causes Thread interruption
+
+                    // Restoring interruption status of the Thread
+                    Thread.currentThread().interrupt();
+                }
+
+                return "should_not_be_delivered";
+            }
+        });
+
+        Maybe<String> fromCallableObservable = Maybe.fromCallable(func);
+
+        Observer<Object> observer = TestHelper.mockObserver();
+
+        TestObserver<String> outer = new TestObserver<String>(observer);
+
+        fromCallableObservable
+                .subscribeOn(Schedulers.computation())
+                .subscribe(outer);
+
+        // Wait until func will be invoked
+        observerLatch.await();
+
+        // Unsubscribing before emission
+        outer.cancel();
+
+        // Emitting result
+        funcLatch.countDown();
+
+        // func must be invoked
+        verify(func).call();
+
+        // Observer must not be notified at all
+        verify(observer).onSubscribe(any(Disposable.class));
+        verifyNoMoreInteractions(observer);
     }
 }

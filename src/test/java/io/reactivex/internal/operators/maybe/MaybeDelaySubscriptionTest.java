@@ -36,18 +36,18 @@ public class MaybeDelaySubscriptionTest {
     public void normal() {
         PublishProcessor<Object> pp = PublishProcessor.create();
 
-        TestObserver<Integer> ts = Maybe.just(1).delaySubscription(pp)
+        TestObserver<Integer> to = Maybe.just(1).delaySubscription(pp)
         .test();
 
         assertTrue(pp.hasSubscribers());
 
-        ts.assertEmpty();
+        to.assertEmpty();
 
         pp.onNext("one");
 
         assertFalse(pp.hasSubscribers());
 
-        ts.assertResult(1);
+        to.assertResult(1);
     }
 
     @Test
@@ -70,19 +70,19 @@ public class MaybeDelaySubscriptionTest {
     public void timedTestScheduler() {
         TestScheduler scheduler = new TestScheduler();
 
-        TestObserver<Integer> ts = Maybe.just(1)
+        TestObserver<Integer> to = Maybe.just(1)
         .delaySubscription(100, TimeUnit.MILLISECONDS, scheduler)
         .test();
 
-        ts.assertEmpty();
+        to.assertEmpty();
 
         scheduler.advanceTimeBy(99, TimeUnit.MILLISECONDS);
 
-        ts.assertEmpty();
+        to.assertEmpty();
 
         scheduler.advanceTimeBy(1, TimeUnit.MILLISECONDS);
 
-        ts.assertResult(1);
+        to.assertResult(1);
     }
 
     @Test
@@ -122,12 +122,12 @@ public class MaybeDelaySubscriptionTest {
         try {
             Flowable<Integer> f = new Flowable<Integer>() {
                 @Override
-                protected void subscribeActual(Subscriber<? super Integer> observer) {
-                    observer.onSubscribe(new BooleanSubscription());
-                    observer.onNext(1);
-                    observer.onError(new TestException());
-                    observer.onComplete();
-                    observer.onNext(2);
+                protected void subscribeActual(Subscriber<? super Integer> subscriber) {
+                    subscriber.onSubscribe(new BooleanSubscription());
+                    subscriber.onNext(1);
+                    subscriber.onError(new TestException());
+                    subscriber.onComplete();
+                    subscriber.onNext(2);
                 }
             };
 

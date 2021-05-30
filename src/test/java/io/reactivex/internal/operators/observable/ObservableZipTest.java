@@ -14,7 +14,6 @@
 package io.reactivex.internal.operators.observable;
 
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.util.*;
@@ -349,9 +348,9 @@ public class ObservableZipTest {
         PublishSubject<String> r2 = PublishSubject.create();
         /* define an Observer to receive aggregated events */
         Observer<String> observer = TestHelper.mockObserver();
-        TestObserver<String> ts = new TestObserver<String>(observer);
+        TestObserver<String> to = new TestObserver<String>(observer);
 
-        Observable.zip(r1, r2, zipr2).subscribe(ts);
+        Observable.zip(r1, r2, zipr2).subscribe(to);
 
         /* simulate the Observables pushing data into the aggregator */
         r1.onNext("hello");
@@ -361,7 +360,7 @@ public class ObservableZipTest {
         verify(observer, never()).onComplete();
         verify(observer, times(1)).onNext("helloworld");
 
-        ts.dispose();
+        to.dispose();
         r1.onNext("hello");
         r2.onNext("again");
 
@@ -794,16 +793,16 @@ public class ObservableZipTest {
                     }
                 }).take(5);
 
-        TestObserver<String> ts = new TestObserver<String>();
-        os.subscribe(ts);
+        TestObserver<String> to = new TestObserver<String>();
+        os.subscribe(to);
 
-        ts.awaitTerminalEvent();
-        ts.assertNoErrors();
+        to.awaitTerminalEvent();
+        to.assertNoErrors();
 
-        assertEquals(5, ts.valueCount());
-        assertEquals("1-1", ts.values().get(0));
-        assertEquals("2-2", ts.values().get(1));
-        assertEquals("5-5", ts.values().get(4));
+        assertEquals(5, to.valueCount());
+        assertEquals("1-1", to.values().get(0));
+        assertEquals("2-2", to.values().get(1));
+        assertEquals("5-5", to.values().get(4));
     }
 
     @Test
@@ -969,10 +968,10 @@ public class ObservableZipTest {
             }
         });
 
-        TestObserver<Object> ts = new TestObserver<Object>();
-        o.subscribe(ts);
-        ts.awaitTerminalEvent(200, TimeUnit.MILLISECONDS);
-        ts.assertNoValues();
+        TestObserver<Object> to = new TestObserver<Object>();
+        o.subscribe(to);
+        to.awaitTerminalEvent(200, TimeUnit.MILLISECONDS);
+        to.assertNoValues();
     }
 
     /**
@@ -1003,7 +1002,7 @@ public class ObservableZipTest {
         Observable<Integer> o1 = createInfiniteObservable(generatedA).take(Observable.bufferSize() * 2);
         Observable<Integer> o2 = createInfiniteObservable(generatedB).take(Observable.bufferSize() * 2);
 
-        TestObserver<String> ts = new TestObserver<String>();
+        TestObserver<String> to = new TestObserver<String>();
         Observable.zip(o1, o2, new BiFunction<Integer, Integer, String>() {
 
             @Override
@@ -1011,11 +1010,11 @@ public class ObservableZipTest {
                 return t1 + "-" + t2;
             }
 
-        }).observeOn(Schedulers.computation()).take(Observable.bufferSize() * 2).subscribe(ts);
+        }).observeOn(Schedulers.computation()).take(Observable.bufferSize() * 2).subscribe(to);
 
-        ts.awaitTerminalEvent();
-        ts.assertNoErrors();
-        assertEquals(Observable.bufferSize() * 2, ts.valueCount());
+        to.awaitTerminalEvent();
+        to.assertNoErrors();
+        assertEquals(Observable.bufferSize() * 2, to.valueCount());
         System.out.println("Generated => A: " + generatedA.get() + " B: " + generatedB.get());
         assertTrue(generatedA.get() < (Observable.bufferSize() * 3));
         assertTrue(generatedB.get() < (Observable.bufferSize() * 3));
@@ -1261,6 +1260,7 @@ public class ObservableZipTest {
         .test()
         .assertResult("12345678");
     }
+
     @Test
     public void zip9() {
         Observable.zip(Observable.just(1),
@@ -1350,6 +1350,34 @@ public class ObservableZipTest {
         .assertResult("[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]");
     }
 
+    /**
+     * Ensures that an ObservableSource implementation can be supplied that doesn't subclass Observable
+     */
+    @Test
+    public void zipIterableNotSubclassingObservable() {
+        final ObservableSource<Integer> s1 = new ObservableSource<Integer>() {
+            @Override
+            public void subscribe (final Observer<? super Integer> observer) {
+                Observable.just(1).subscribe(observer);
+            }
+        };
+        final ObservableSource<Integer> s2 = new ObservableSource<Integer>() {
+            @Override
+            public void subscribe (final Observer<? super Integer> observer) {
+                Observable.just(2).subscribe(observer);
+            }
+        };
+
+        Observable.zip(Arrays.asList(s1, s2), new Function<Object[], Object>() {
+            @Override
+            public Object apply(Object[] a) throws Exception {
+                return Arrays.toString(a);
+            }
+        })
+        .test()
+        .assertResult("[1, 2]");
+    }
+
     @Test
     public void dispose() {
         TestHelper.checkDisposed(Observable.zip(Observable.just(1), Observable.just(1), new BiFunction<Integer, Integer, Object>() {
@@ -1363,7 +1391,7 @@ public class ObservableZipTest {
     @Test
     public void noCrossBoundaryFusion() {
         for (int i = 0; i < 500; i++) {
-            TestObserver<List<Object>> ts = Observable.zip(
+            TestObserver<List<Object>> to = Observable.zip(
                     Observable.just(1).observeOn(Schedulers.single()).map(new Function<Integer, Object>() {
                         @Override
                         public Object apply(Integer v) throws Exception {
@@ -1387,7 +1415,7 @@ public class ObservableZipTest {
             .awaitDone(5, TimeUnit.SECONDS)
             .assertValueCount(1);
 
-            List<Object> list = ts.values().get(0);
+            List<Object> list = to.values().get(0);
 
             assertTrue(list.toString(), list.contains("RxSi"));
             assertTrue(list.toString(), list.contains("RxCo"));
@@ -1399,7 +1427,7 @@ public class ObservableZipTest {
         final PublishSubject<Integer> ps1 = PublishSubject.create();
         final PublishSubject<Integer> ps2 = PublishSubject.create();
 
-        TestObserver<Integer> ts = new TestObserver<Integer>() {
+        TestObserver<Integer> to = new TestObserver<Integer>() {
             @Override
             public void onNext(Integer t) {
                 super.onNext(t);
@@ -1421,10 +1449,41 @@ public class ObservableZipTest {
                 return t1 + t2;
             }
         })
-        .subscribe(ts);
+        .subscribe(to);
 
         ps1.onNext(1);
         ps2.onNext(2);
-        ts.assertResult(3);
+        to.assertResult(3);
     }
+
+    @Test
+    public void firstErrorPreventsSecondSubscription() {
+        final AtomicInteger counter = new AtomicInteger();
+
+        List<Observable<?>> observableList = new ArrayList<Observable<?>>();
+        observableList.add(Observable.create(new ObservableOnSubscribe<Object>() {
+            @Override
+            public void subscribe(ObservableEmitter<Object> e)
+                    throws Exception { throw new TestException(); }
+        }));
+        observableList.add(Observable.create(new ObservableOnSubscribe<Object>() {
+            @Override
+            public void subscribe(ObservableEmitter<Object> e)
+                    throws Exception { counter.getAndIncrement(); }
+        }));
+
+        Observable.zip(observableList,
+                new Function<Object[], Object>() {
+                    @Override
+                    public Object apply(Object[] a) throws Exception {
+                        return a;
+                    }
+                })
+        .test()
+        .assertFailure(TestException.class)
+        ;
+
+        assertEquals(0, counter.get());
+    }
+
 }

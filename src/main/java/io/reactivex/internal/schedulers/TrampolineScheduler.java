@@ -49,7 +49,7 @@ public final class TrampolineScheduler extends Scheduler {
     @NonNull
     @Override
     public Disposable scheduleDirect(@NonNull Runnable run) {
-        run.run();
+        RxJavaPlugins.onSchedule(run).run();
         return EmptyDisposable.INSTANCE;
     }
 
@@ -58,7 +58,7 @@ public final class TrampolineScheduler extends Scheduler {
     public Disposable scheduleDirect(@NonNull Runnable run, long delay, TimeUnit unit) {
         try {
             unit.sleep(delay);
-            run.run();
+            RxJavaPlugins.onSchedule(run).run();
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             RxJavaPlugins.onError(ex);
@@ -100,6 +100,10 @@ public final class TrampolineScheduler extends Scheduler {
                 int missed = 1;
                 for (;;) {
                     for (;;) {
+                        if (disposed) {
+                            queue.clear();
+                            return EmptyDisposable.INSTANCE;
+                        }
                         final TimedRunnable polled = queue.poll();
                         if (polled == null) {
                             break;
@@ -186,14 +190,12 @@ public final class TrampolineScheduler extends Scheduler {
                 long t = worker.now(TimeUnit.MILLISECONDS);
                 if (execTime > t) {
                     long delay = execTime - t;
-                    if (delay > 0) {
-                        try {
-                            Thread.sleep(delay);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            RxJavaPlugins.onError(e);
-                            return;
-                        }
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        RxJavaPlugins.onError(e);
+                        return;
                     }
                 }
 

@@ -62,7 +62,7 @@ public final class BlockingFlowableIterable<T> implements Iterable<T> {
         long produced;
 
         volatile boolean done;
-        Throwable error;
+        volatile Throwable error;
 
         BlockingFlowableIterator(int batchSize) {
             this.queue = new SpscArrayQueue<T>(batchSize);
@@ -75,6 +75,13 @@ public final class BlockingFlowableIterable<T> implements Iterable<T> {
         @Override
         public boolean hasNext() {
             for (;;) {
+                if (isDisposed()) {
+                    Throwable e = error;
+                    if (e != null) {
+                        throw ExceptionHelper.wrapOrThrow(e);
+                    }
+                    return false;
+                }
                 boolean d = done;
                 boolean empty = queue.isEmpty();
                 if (d) {
@@ -90,7 +97,7 @@ public final class BlockingFlowableIterable<T> implements Iterable<T> {
                     BlockingHelper.verifyNonBlocking();
                     lock.lock();
                     try {
-                        while (!done && queue.isEmpty()) {
+                        while (!done && queue.isEmpty() && !isDisposed()) {
                             condition.await();
                         }
                     } catch (InterruptedException ex) {
@@ -125,9 +132,7 @@ public final class BlockingFlowableIterable<T> implements Iterable<T> {
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (SubscriptionHelper.setOnce(this, s)) {
-                s.request(batchSize);
-            }
+            SubscriptionHelper.setOnce(this, s, batchSize);
         }
 
         @Override
@@ -177,11 +182,12 @@ public final class BlockingFlowableIterable<T> implements Iterable<T> {
         @Override
         public void dispose() {
             SubscriptionHelper.cancel(this);
+            signalConsumer();
         }
 
         @Override
         public boolean isDisposed() {
-            return SubscriptionHelper.isCancelled(get());
+            return get() == SubscriptionHelper.CANCELLED;
         }
     }
 }

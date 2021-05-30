@@ -115,16 +115,16 @@ public class FlowableConversionTest {
         public CylonDetectorObservable<R> apply(final Publisher<T> onSubscribe) {
             return CylonDetectorObservable.create(new Publisher<R>() {
                 @Override
-                public void subscribe(Subscriber<? super R> o) {
+                public void subscribe(Subscriber<? super R> subscriber) {
                     try {
-                        Subscriber<? super T> st = operator.apply(o);
+                        Subscriber<? super T> st = operator.apply(subscriber);
                         try {
                             onSubscribe.subscribe(st);
                         } catch (Throwable e) {
                             st.onError(e);
                         }
                     } catch (Throwable e) {
-                        o.onError(e);
+                        subscriber.onError(e);
                     }
 
                 }});
@@ -147,7 +147,7 @@ public class FlowableConversionTest {
 
     @Test
     public void testConversionBetweenObservableClasses() {
-        final TestObserver<String> subscriber = new TestObserver<String>(new DefaultObserver<String>() {
+        final TestObserver<String> to = new TestObserver<String>(new DefaultObserver<String>() {
 
             @Override
             public void onComplete() {
@@ -196,17 +196,17 @@ public class FlowableConversionTest {
                     return a + n + "\n";
                 }
             })
-            .subscribe(subscriber);
+            .subscribe(to);
 
-        subscriber.assertNoErrors();
-        subscriber.assertComplete();
+        to.assertNoErrors();
+        to.assertComplete();
     }
 
     @Test
     public void testConvertToConcurrentQueue() {
         final AtomicReference<Throwable> thrown = new AtomicReference<Throwable>(null);
         final AtomicBoolean isFinished = new AtomicBoolean(false);
-        ConcurrentLinkedQueue<? extends Integer> queue = Flowable.range(0,5)
+        ConcurrentLinkedQueue<? extends Integer> queue = Flowable.range(0, 5)
                 .flatMap(new Function<Integer, Publisher<Integer>>() {
                     @Override
                     public Publisher<Integer> apply(final Integer i) {

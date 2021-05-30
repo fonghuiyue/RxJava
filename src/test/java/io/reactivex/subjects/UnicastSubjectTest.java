@@ -14,44 +14,51 @@
 package io.reactivex.subjects;
 
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.mock;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Test;
 
 import io.reactivex.*;
 import io.reactivex.disposables.*;
-import io.reactivex.exceptions.TestException;
-import io.reactivex.internal.fuseable.*;
+import io.reactivex.exceptions.*;
+import io.reactivex.internal.functions.Functions;
+import io.reactivex.internal.fuseable.QueueFuseable;
 import io.reactivex.observers.*;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.schedulers.Schedulers;
-import static org.mockito.Mockito.mock;
 
-public class UnicastSubjectTest {
+public class UnicastSubjectTest extends SubjectTest<Integer> {
+
+    @Override
+    protected Subject<Integer> create() {
+        return UnicastSubject.create();
+    }
 
     @Test
     public void fusionLive() {
         UnicastSubject<Integer> ap = UnicastSubject.create();
 
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueDisposable.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
-        ap.subscribe(ts);
+        ap.subscribe(to);
 
-        ts
+        to
         .assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueDisposable.ASYNC));
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC));
 
-        ts.assertNoValues().assertNoErrors().assertNotComplete();
+        to.assertNoValues().assertNoErrors().assertNotComplete();
 
         ap.onNext(1);
 
-        ts.assertValue(1).assertNoErrors().assertNotComplete();
+        to.assertValue(1).assertNoErrors().assertNotComplete();
 
         ap.onComplete();
 
-        ts.assertResult(1);
+        to.assertResult(1);
     }
 
     @Test
@@ -60,13 +67,13 @@ public class UnicastSubjectTest {
         ap.onNext(1);
         ap.onComplete();
 
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueDisposable.ANY);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
-        ap.subscribe(ts);
+        ap.subscribe(to);
 
-        ts
+        to
         .assertOf(ObserverFusion.<Integer>assertFuseable())
-        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueDisposable.ASYNC))
+        .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult(1);
     }
 
@@ -75,10 +82,10 @@ public class UnicastSubjectTest {
         UnicastSubject<Integer> ap = UnicastSubject.create(false);
         ap.onNext(1);
         ap.onError(new RuntimeException());
-        TestObserver<Integer> ts = TestObserver.create();
-        ap.subscribe(ts);
+        TestObserver<Integer> to = TestObserver.create();
+        ap.subscribe(to);
 
-        ts
+        to
                 .assertValueCount(0)
                 .assertError(RuntimeException.class);
     }
@@ -89,10 +96,10 @@ public class UnicastSubjectTest {
         UnicastSubject<Integer> ap = UnicastSubject.create(16, noop, false);
         ap.onNext(1);
         ap.onError(new RuntimeException());
-        TestObserver<Integer> ts = TestObserver.create();
-        ap.subscribe(ts);
+        TestObserver<Integer> to = TestObserver.create();
+        ap.subscribe(to);
 
-        ts
+        to
                 .assertValueCount(0)
                 .assertError(RuntimeException.class);
     }
@@ -103,10 +110,10 @@ public class UnicastSubjectTest {
         UnicastSubject<Integer> ap = UnicastSubject.create(16, noop, true);
         ap.onNext(1);
         ap.onError(new RuntimeException());
-        TestObserver<Integer> ts = TestObserver.create();
-        ap.subscribe(ts);
+        TestObserver<Integer> to = TestObserver.create();
+        ap.subscribe(to);
 
-        ts
+        to
                 .assertValueCount(1)
                 .assertError(RuntimeException.class);
     }
@@ -116,10 +123,10 @@ public class UnicastSubjectTest {
         UnicastSubject<Integer> ap = UnicastSubject.create(false);
         ap.onNext(1);
         ap.onError(new RuntimeException());
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueDisposable.ANY);
-        ap.subscribe(ts);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
+        ap.subscribe(to);
 
-        ts
+        to
                 .assertValueCount(0)
                 .assertError(RuntimeException.class);
     }
@@ -131,10 +138,10 @@ public class UnicastSubjectTest {
         ap.onNext(2);
         ap.onNext(3);
         ap.onComplete();
-        TestObserver<Integer> ts = ObserverFusion.newTest(QueueDisposable.ANY);
-        ap.subscribe(ts);
+        TestObserver<Integer> to = ObserverFusion.newTest(QueueFuseable.ANY);
+        ap.subscribe(to);
 
-        ts
+        to
                 .assertValueCount(3)
                 .assertComplete();
     }
@@ -146,10 +153,10 @@ public class UnicastSubjectTest {
         ap.onNext(2);
         ap.onNext(3);
         ap.onComplete();
-        TestObserver<Integer> ts = TestObserver.create();
-        ap.subscribe(ts);
+        TestObserver<Integer> to = TestObserver.create();
+        ap.subscribe(to);
 
-        ts
+        to
                 .assertValueCount(3)
                 .assertComplete();
     }
@@ -164,9 +171,9 @@ public class UnicastSubjectTest {
             }
         });
 
-        assertEquals(false, didRunOnTerminate.get());
+        assertFalse(didRunOnTerminate.get());
         us.onError(new RuntimeException("some error"));
-        assertEquals(true, didRunOnTerminate.get());
+        assertTrue(didRunOnTerminate.get());
     }
 
     @Test
@@ -179,9 +186,9 @@ public class UnicastSubjectTest {
             }
         });
 
-        assertEquals(false, didRunOnTerminate.get());
+        assertFalse(didRunOnTerminate.get());
         us.onComplete();
-        assertEquals(true, didRunOnTerminate.get());
+        assertTrue(didRunOnTerminate.get());
     }
 
     @Test
@@ -196,9 +203,9 @@ public class UnicastSubjectTest {
 
         final Disposable subscribe = us.subscribe();
 
-        assertEquals(false, didRunOnTerminate.get());
+        assertFalse(didRunOnTerminate.get());
         subscribe.dispose();
-        assertEquals(true, didRunOnTerminate.get());
+        assertTrue(didRunOnTerminate.get());
     }
 
     @Test(expected = NullPointerException.class)
@@ -217,66 +224,8 @@ public class UnicastSubjectTest {
     }
 
     @Test
-    public void onNextNull() {
-        final UnicastSubject<Object> s = UnicastSubject.create();
-
-        s.onNext(null);
-
-        s.test()
-            .assertNoValues()
-            .assertError(NullPointerException.class)
-            .assertErrorMessage("onNext called with null. Null values are generally not allowed in 2.x operators and sources.");
-    }
-
-    @Test
-    public void onErrorNull() {
-        final UnicastSubject<Object> s = UnicastSubject.create();
-
-        s.onError(null);
-
-        s.test()
-            .assertNoValues()
-            .assertError(NullPointerException.class)
-            .assertErrorMessage("onError called with null. Null values are generally not allowed in 2.x operators and sources.");
-    }
-
-    @Test
-    public void onNextNullDelayed() {
-        final UnicastSubject<Object> p = UnicastSubject.create();
-
-        TestObserver<Object> ts = p.test();
-
-        p.onNext(null);
-
-        ts
-            .assertNoValues()
-            .assertError(NullPointerException.class)
-            .assertErrorMessage("onNext called with null. Null values are generally not allowed in 2.x operators and sources.");
-    }
-
-    @Test
-    public void onErrorNullDelayed() {
-        final UnicastSubject<Object> p = UnicastSubject.create();
-
-        assertFalse(p.hasObservers());
-
-        TestObserver<Object> ts = p.test();
-
-        assertTrue(p.hasObservers());
-
-        p.onError(null);
-
-        assertFalse(p.hasObservers());
-
-        ts
-            .assertNoValues()
-            .assertError(NullPointerException.class)
-            .assertErrorMessage("onError called with null. Null values are generally not allowed in 2.x operators and sources.");
-    }
-
-    @Test
     public void completeCancelRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final int[] calls = { 0 };
             final UnicastSubject<Object> up = UnicastSubject.create(100, new Runnable() {
                 @Override
@@ -285,12 +234,12 @@ public class UnicastSubjectTest {
                 }
             });
 
-            final TestObserver<Object> ts = up.test();
+            final TestObserver<Object> to = up.test();
 
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    ts.cancel();
+                    to.cancel();
                 }
             };
 
@@ -301,7 +250,7 @@ public class UnicastSubjectTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             assertEquals(1, calls[0]);
         }
@@ -353,11 +302,11 @@ public class UnicastSubjectTest {
     public void rejectSyncFusion() {
         UnicastSubject<Object> p = UnicastSubject.create();
 
-        TestObserver<Object> ts = ObserverFusion.newTest(QueueDisposable.SYNC);
+        TestObserver<Object> to = ObserverFusion.newTest(QueueFuseable.SYNC);
 
-        p.subscribe(ts);
+        p.subscribe(to);
 
-        ObserverFusion.assertFusion(ts, QueueDisposable.NONE);
+        ObserverFusion.assertFusion(to, QueueFuseable.NONE);
     }
 
     @Test
@@ -371,7 +320,7 @@ public class UnicastSubjectTest {
     public void multiSubscriber() {
         UnicastSubject<Object> p = UnicastSubject.create();
 
-        TestObserver<Object> ts = p.test();
+        TestObserver<Object> to = p.test();
 
         p.test()
         .assertFailure(IllegalStateException.class);
@@ -379,17 +328,17 @@ public class UnicastSubjectTest {
         p.onNext(1);
         p.onComplete();
 
-        ts.assertResult(1);
+        to.assertResult(1);
     }
 
     @Test
     public void fusedDrainCancel() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final UnicastSubject<Object> p = UnicastSubject.create();
 
-            final TestObserver<Object> ts = ObserverFusion.newTest(QueueSubscription.ANY);
+            final TestObserver<Object> to = ObserverFusion.newTest(QueueFuseable.ANY);
 
-            p.subscribe(ts);
+            p.subscribe(to);
 
             Runnable r1 = new Runnable() {
                 @Override
@@ -401,11 +350,11 @@ public class UnicastSubjectTest {
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    ts.cancel();
+                    to.cancel();
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 
@@ -436,5 +385,111 @@ public class UnicastSubjectTest {
         us.onSubscribe(d);
 
         assertTrue(d.isDisposed());
+    }
+
+    @Test
+    public void subscribeRace() {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final UnicastSubject<Integer> us = UnicastSubject.create();
+
+            final TestObserver<Integer> to1 = new TestObserver<Integer>();
+            final TestObserver<Integer> to2 = new TestObserver<Integer>();
+
+            Runnable r1 = new Runnable() {
+                @Override
+                public void run() {
+                    us.subscribe(to1);
+                }
+            };
+
+            Runnable r2 = new Runnable() {
+                @Override
+                public void run() {
+                    us.subscribe(to2);
+                }
+            };
+
+            TestHelper.race(r1, r2);
+
+            if (to1.errorCount() == 0) {
+                to2.assertFailure(IllegalStateException.class);
+            } else
+            if (to2.errorCount() == 0) {
+                to1.assertFailure(IllegalStateException.class);
+            } else {
+                fail("Neither TestObserver failed");
+            }
+        }
+    }
+
+    @Test
+    public void hasObservers() {
+        UnicastSubject<Integer> us = UnicastSubject.create();
+
+        assertFalse(us.hasObservers());
+
+        TestObserver<Integer> to = us.test();
+
+        assertTrue(us.hasObservers());
+
+        to.cancel();
+
+        assertFalse(us.hasObservers());
+    }
+
+    @Test
+    public void drainFusedFailFast() {
+        UnicastSubject<Integer> us = UnicastSubject.create(false);
+
+        TestObserver<Integer> to = us.to(ObserverFusion.<Integer>test(QueueFuseable.ANY, false));
+
+        us.done = true;
+        us.drainFused(to);
+
+        to.assertResult();
+    }
+
+    @Test
+    public void drainFusedFailFastEmpty() {
+        UnicastSubject<Integer> us = UnicastSubject.create(false);
+
+        TestObserver<Integer> to = us.to(ObserverFusion.<Integer>test(QueueFuseable.ANY, false));
+
+        us.drainFused(to);
+
+        to.assertEmpty();
+    }
+
+    @Test
+    public void fusedNoConcurrentCleanDueToCancel() {
+        for (int j = 0; j < TestHelper.RACE_LONG_LOOPS; j++) {
+            List<Throwable> errors = TestHelper.trackPluginErrors();
+            try {
+                final UnicastSubject<Integer> us = UnicastSubject.create();
+
+                TestObserver<Integer> to = us
+                .observeOn(Schedulers.io())
+                .map(Functions.<Integer>identity())
+                .observeOn(Schedulers.single())
+                .firstOrError()
+                .test();
+
+                for (int i = 0; us.hasObservers(); i++) {
+                    us.onNext(i);
+                }
+
+                to
+                .awaitDone(5, TimeUnit.SECONDS)
+                ;
+
+                if (!errors.isEmpty()) {
+                    throw new CompositeException(errors);
+                }
+
+                to.assertResult(0);
+            } finally {
+                RxJavaPlugins.reset();
+            }
+        }
     }
 }

@@ -16,11 +16,14 @@ package io.reactivex.internal.operators.single;
 import static org.junit.Assert.*;
 
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Test;
 
 import io.reactivex.*;
 import io.reactivex.exceptions.TestException;
+import io.reactivex.functions.BiConsumer;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.processors.PublishProcessor;
@@ -33,7 +36,7 @@ public class SingleAmbTest {
         PublishProcessor<Integer> pp1 = PublishProcessor.create();
         PublishProcessor<Integer> pp2 = PublishProcessor.create();
 
-        TestObserver<Integer> ts = pp1.single(-99).ambWith(pp2.single(-99)).test();
+        TestObserver<Integer> to = pp1.single(-99).ambWith(pp2.single(-99)).test();
 
         assertTrue(pp1.hasSubscribers());
         assertTrue(pp2.hasSubscribers());
@@ -44,7 +47,7 @@ public class SingleAmbTest {
         assertFalse(pp1.hasSubscribers());
         assertFalse(pp2.hasSubscribers());
 
-        ts.assertResult(1);
+        to.assertResult(1);
 
     }
 
@@ -53,7 +56,7 @@ public class SingleAmbTest {
         PublishProcessor<Integer> pp1 = PublishProcessor.create();
         PublishProcessor<Integer> pp2 = PublishProcessor.create();
 
-        TestObserver<Integer> ts = pp1.single(-99).ambWith(pp2.single(-99)).test();
+        TestObserver<Integer> to = pp1.single(-99).ambWith(pp2.single(-99)).test();
 
         assertTrue(pp1.hasSubscribers());
         assertTrue(pp2.hasSubscribers());
@@ -64,7 +67,7 @@ public class SingleAmbTest {
         assertFalse(pp1.hasSubscribers());
         assertFalse(pp2.hasSubscribers());
 
-        ts.assertResult(2);
+        to.assertResult(2);
     }
 
     @SuppressWarnings("unchecked")
@@ -74,7 +77,7 @@ public class SingleAmbTest {
         PublishProcessor<Integer> pp2 = PublishProcessor.create();
 
         List<Single<Integer>> singles = Arrays.asList(pp1.single(-99), pp2.single(-99));
-        TestObserver<Integer> ts = Single.amb(singles).test();
+        TestObserver<Integer> to = Single.amb(singles).test();
 
         assertTrue(pp1.hasSubscribers());
         assertTrue(pp2.hasSubscribers());
@@ -85,7 +88,7 @@ public class SingleAmbTest {
         assertFalse(pp1.hasSubscribers());
         assertFalse(pp2.hasSubscribers());
 
-        ts.assertResult(1);
+        to.assertResult(1);
 
     }
 
@@ -96,7 +99,7 @@ public class SingleAmbTest {
         PublishProcessor<Integer> pp2 = PublishProcessor.create();
 
         List<Single<Integer>> singles = Arrays.asList(pp1.single(-99), pp2.single(-99));
-        TestObserver<Integer> ts = Single.amb(singles).test();
+        TestObserver<Integer> to = Single.amb(singles).test();
 
         assertTrue(pp1.hasSubscribers());
         assertTrue(pp2.hasSubscribers());
@@ -107,7 +110,7 @@ public class SingleAmbTest {
         assertFalse(pp1.hasSubscribers());
         assertFalse(pp2.hasSubscribers());
 
-        ts.assertResult(2);
+        to.assertResult(2);
     }
 
     @SuppressWarnings("unchecked")
@@ -134,7 +137,7 @@ public class SingleAmbTest {
 
     @Test
     public void nullSourceSuccessRace() {
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             List<Throwable> errors = TestHelper.trackPluginErrors();
 
             try {
@@ -159,7 +162,7 @@ public class SingleAmbTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
                 if (!errors.isEmpty()) {
                     TestHelper.assertError(errors, 0, NullPointerException.class);
@@ -173,7 +176,7 @@ public class SingleAmbTest {
     @SuppressWarnings("unchecked")
     @Test
     public void multipleErrorRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             List<Throwable> errors = TestHelper.trackPluginErrors();
 
             try {
@@ -199,7 +202,7 @@ public class SingleAmbTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
                 if (!errors.isEmpty()) {
                     TestHelper.assertUndeliverable(errors, 0, TestException.class);
@@ -213,7 +216,7 @@ public class SingleAmbTest {
     @SuppressWarnings("unchecked")
     @Test
     public void successErrorRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             List<Throwable> errors = TestHelper.trackPluginErrors();
 
             try {
@@ -240,7 +243,7 @@ public class SingleAmbTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
                 if (!errors.isEmpty()) {
                     TestHelper.assertUndeliverable(errors, 0, TestException.class);
@@ -280,5 +283,62 @@ public class SingleAmbTest {
     public void ambArrayOrder() {
         Single<Integer> error = Single.error(new RuntimeException());
         Single.ambArray(Single.just(1), error).test().assertValue(1);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void noWinnerSuccessDispose() throws Exception {
+        for (int i = 0; i < TestHelper.RACE_LONG_LOOPS; i++) {
+            final AtomicBoolean interrupted = new AtomicBoolean();
+            final CountDownLatch cdl = new CountDownLatch(1);
+
+            Single.ambArray(
+                Single.just(1)
+                    .subscribeOn(Schedulers.single())
+                    .observeOn(Schedulers.computation()),
+                Single.never()
+            )
+            .subscribe(new BiConsumer<Object, Throwable>() {
+                @Override
+                public void accept(Object v, Throwable e) throws Exception {
+                    assertNotNull(v);
+                    assertNull(e);
+                    interrupted.set(Thread.currentThread().isInterrupted());
+                    cdl.countDown();
+                }
+            });
+
+            assertTrue(cdl.await(500, TimeUnit.SECONDS));
+            assertFalse("Interrupted!", interrupted.get());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void noWinnerErrorDispose() throws Exception {
+        final TestException ex = new TestException();
+        for (int i = 0; i < TestHelper.RACE_LONG_LOOPS; i++) {
+            final AtomicBoolean interrupted = new AtomicBoolean();
+            final CountDownLatch cdl = new CountDownLatch(1);
+
+            Single.ambArray(
+                Single.error(ex)
+                    .subscribeOn(Schedulers.single())
+                    .observeOn(Schedulers.computation()),
+                Single.never()
+            )
+            .subscribe(new BiConsumer<Object, Throwable>() {
+                @Override
+                public void accept(Object v, Throwable e) throws Exception {
+                    assertNull(v);
+                    assertNotNull(e);
+                    interrupted.set(Thread.currentThread().isInterrupted());
+                    cdl.countDown();
+                }
+            });
+
+            assertTrue(cdl.await(500, TimeUnit.SECONDS));
+            assertFalse("Interrupted!", interrupted.get());
+        }
     }
 }

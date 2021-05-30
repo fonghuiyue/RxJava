@@ -20,7 +20,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-import io.reactivex.plugins.RxJavaPlugins;
+import io.reactivex.functions.Function;
 
 /**
  * Manages the creating of ScheduledExecutorServices and sets up purging.
@@ -57,19 +57,25 @@ public final class SchedulerPoolFactory {
      * Starts the purge thread if not already started.
      */
     public static void start() {
-        for (;;) {
-            ScheduledExecutorService curr = PURGE_THREAD.get();
-            if (curr != null && !curr.isShutdown()) {
-                return;
-            }
-            ScheduledExecutorService next = Executors.newScheduledThreadPool(1, new RxThreadFactory("RxSchedulerPurge"));
-            if (PURGE_THREAD.compareAndSet(curr, next)) {
+        tryStart(PURGE_ENABLED);
+    }
 
-                next.scheduleAtFixedRate(new ScheduledTask(), PURGE_PERIOD_SECONDS, PURGE_PERIOD_SECONDS, TimeUnit.SECONDS);
+    static void tryStart(boolean purgeEnabled) {
+        if (purgeEnabled) {
+            for (;;) {
+                ScheduledExecutorService curr = PURGE_THREAD.get();
+                if (curr != null) {
+                    return;
+                }
+                ScheduledExecutorService next = Executors.newScheduledThreadPool(1, new RxThreadFactory("RxSchedulerPurge"));
+                if (PURGE_THREAD.compareAndSet(curr, next)) {
 
-                return;
-            } else {
-                next.shutdownNow();
+                    next.scheduleAtFixedRate(new ScheduledTask(), PURGE_PERIOD_SECONDS, PURGE_PERIOD_SECONDS, TimeUnit.SECONDS);
+
+                    return;
+                } else {
+                    next.shutdownNow();
+                }
             }
         }
     }
@@ -78,28 +84,56 @@ public final class SchedulerPoolFactory {
      * Stops the purge thread.
      */
     public static void shutdown() {
-        PURGE_THREAD.get().shutdownNow();
+        ScheduledExecutorService exec = PURGE_THREAD.getAndSet(null);
+        if (exec != null) {
+            exec.shutdownNow();
+        }
         POOLS.clear();
     }
 
     static {
-        boolean purgeEnable = true;
-        int purgePeriod = 1;
-
-        Properties properties = System.getProperties();
-
-        if (properties.containsKey(PURGE_ENABLED_KEY)) {
-            purgeEnable = Boolean.getBoolean(PURGE_ENABLED_KEY);
-
-            if (purgeEnable && properties.containsKey(PURGE_PERIOD_SECONDS_KEY)) {
-                purgePeriod = Integer.getInteger(PURGE_PERIOD_SECONDS_KEY, purgePeriod);
-            }
-        }
-
-        PURGE_ENABLED = purgeEnable;
-        PURGE_PERIOD_SECONDS = purgePeriod;
+        SystemPropertyAccessor propertyAccessor = new SystemPropertyAccessor();
+        PURGE_ENABLED = getBooleanProperty(true, PURGE_ENABLED_KEY, true, true, propertyAccessor);
+        PURGE_PERIOD_SECONDS = getIntProperty(PURGE_ENABLED, PURGE_PERIOD_SECONDS_KEY, 1, 1, propertyAccessor);
 
         start();
+    }
+
+    static int getIntProperty(boolean enabled, String key, int defaultNotFound, int defaultNotEnabled, Function<String, String> propertyAccessor) {
+        if (enabled) {
+            try {
+                String value = propertyAccessor.apply(key);
+                if (value == null) {
+                    return defaultNotFound;
+                }
+                return Integer.parseInt(value);
+            } catch (Throwable ex) {
+                return defaultNotFound;
+            }
+        }
+        return defaultNotEnabled;
+    }
+
+    static boolean getBooleanProperty(boolean enabled, String key, boolean defaultNotFound, boolean defaultNotEnabled, Function<String, String> propertyAccessor) {
+        if (enabled) {
+            try {
+                String value = propertyAccessor.apply(key);
+                if (value == null) {
+                    return defaultNotFound;
+                }
+                return "true".equals(value);
+            } catch (Throwable ex) {
+                return defaultNotFound;
+            }
+        }
+        return defaultNotEnabled;
+    }
+
+    static final class SystemPropertyAccessor implements Function<String, String> {
+        @Override
+        public String apply(String t) throws Exception {
+            return System.getProperty(t);
+        }
     }
 
     /**
@@ -109,27 +143,26 @@ public final class SchedulerPoolFactory {
      */
     public static ScheduledExecutorService create(ThreadFactory factory) {
         final ScheduledExecutorService exec = Executors.newScheduledThreadPool(1, factory);
-        if (exec instanceof ScheduledThreadPoolExecutor) {
+        tryPutIntoPool(PURGE_ENABLED, exec);
+        return exec;
+    }
+
+    static void tryPutIntoPool(boolean purgeEnabled, ScheduledExecutorService exec) {
+        if (purgeEnabled && exec instanceof ScheduledThreadPoolExecutor) {
             ScheduledThreadPoolExecutor e = (ScheduledThreadPoolExecutor) exec;
             POOLS.put(e, exec);
         }
-        return exec;
     }
 
     static final class ScheduledTask implements Runnable {
         @Override
         public void run() {
-            try {
-                for (ScheduledThreadPoolExecutor e : new ArrayList<ScheduledThreadPoolExecutor>(POOLS.keySet())) {
-                    if (e.isShutdown()) {
-                        POOLS.remove(e);
-                    } else {
-                        e.purge();
-                    }
+            for (ScheduledThreadPoolExecutor e : new ArrayList<ScheduledThreadPoolExecutor>(POOLS.keySet())) {
+                if (e.isShutdown()) {
+                    POOLS.remove(e);
+                } else {
+                    e.purge();
                 }
-            } catch (Throwable e) {
-                // Exceptions.throwIfFatal(e); nowhere to go
-                RxJavaPlugins.onError(e);
             }
         }
     }

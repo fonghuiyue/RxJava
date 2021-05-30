@@ -13,7 +13,6 @@
 
 package io.reactivex.internal.operators.observable;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
@@ -24,10 +23,55 @@ import io.reactivex.*;
 import io.reactivex.disposables.Disposables;
 import io.reactivex.exceptions.TestException;
 import io.reactivex.functions.Function;
+import io.reactivex.internal.functions.Functions;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
 
+@SuppressWarnings("deprecation")
 public class ObservableDematerializeTest {
+
+    @Test
+    public void simpleSelector() {
+        Observable<Notification<Integer>> notifications = Observable.just(1, 2).materialize();
+        Observable<Integer> dematerialize = notifications.dematerialize(Functions.<Notification<Integer>>identity());
+
+        Observer<Integer> observer = TestHelper.mockObserver();
+
+        dematerialize.subscribe(observer);
+
+        verify(observer, times(1)).onNext(1);
+        verify(observer, times(1)).onNext(2);
+        verify(observer, times(1)).onComplete();
+        verify(observer, never()).onError(any(Throwable.class));
+    }
+
+    @Test
+    public void selectorCrash() {
+        Observable.just(1, 2)
+        .materialize()
+        .dematerialize(new Function<Notification<Integer>, Notification<Object>>() {
+            @Override
+            public Notification<Object> apply(Notification<Integer> v) throws Exception {
+                throw new TestException();
+            }
+        })
+        .test()
+        .assertFailure(TestException.class);
+    }
+
+    @Test
+    public void selectorNull() {
+        Observable.just(1, 2)
+        .materialize()
+        .dematerialize(new Function<Notification<Integer>, Notification<Object>>() {
+            @Override
+            public Notification<Object> apply(Notification<Integer> v) throws Exception {
+                return null;
+            }
+        })
+        .test()
+        .assertFailure(NullPointerException.class);
+    }
 
     @Test
     public void testDematerialize1() {
@@ -96,10 +140,10 @@ public class ObservableDematerializeTest {
 
         Observer<Integer> observer = TestHelper.mockObserver();
 
-        TestObserver<Integer> ts = new TestObserver<Integer>(observer);
-        dematerialize.subscribe(ts);
+        TestObserver<Integer> to = new TestObserver<Integer>(observer);
+        dematerialize.subscribe(to);
 
-        System.out.println(ts.errors());
+        System.out.println(to.errors());
 
         verify(observer, never()).onError(any(Throwable.class));
         verify(observer, times(1)).onComplete();
@@ -174,5 +218,20 @@ public class ObservableDematerializeTest {
         } finally {
             RxJavaPlugins.reset();
         }
+    }
+
+    @Test
+    public void nonNotificationInstanceAfterDispose() {
+        new Observable<Object>() {
+            @Override
+            protected void subscribeActual(Observer<? super Object> observer) {
+                observer.onSubscribe(Disposables.empty());
+                observer.onNext(Notification.createOnComplete());
+                observer.onNext(1);
+            }
+        }
+        .dematerialize()
+        .test()
+        .assertResult();
     }
 }

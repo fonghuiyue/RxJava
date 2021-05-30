@@ -13,11 +13,11 @@
 
 package io.reactivex.internal.operators.single;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertNotEquals;
 
 import java.util.List;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Test;
 import org.reactivestreams.Subscriber;
@@ -27,38 +27,63 @@ import io.reactivex.disposables.Disposables;
 import io.reactivex.exceptions.TestException;
 import io.reactivex.functions.*;
 import io.reactivex.internal.subscriptions.BooleanSubscription;
+import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
-import io.reactivex.schedulers.Schedulers;
+import io.reactivex.schedulers.*;
 import io.reactivex.subjects.PublishSubject;
 
 public class SingleDelayTest {
     @Test
-    public void delay() throws Exception {
-        final AtomicInteger value = new AtomicInteger();
+    public void delayOnSuccess() {
+        final TestScheduler scheduler = new TestScheduler();
+        final TestObserver<Integer> observer = Single.just(1)
+            .delay(5, TimeUnit.SECONDS, scheduler)
+            .test();
 
-        Single.just(1).delay(200, TimeUnit.MILLISECONDS)
-        .subscribe(new BiConsumer<Integer, Throwable>() {
-            @Override
-            public void accept(Integer v, Throwable e) throws Exception {
-                value.set(v);
-            }
-        });
+        scheduler.advanceTimeTo(2, TimeUnit.SECONDS);
+        observer.assertNoValues();
 
-        Thread.sleep(100);
-
-        assertEquals(0, value.get());
-
-        Thread.sleep(200);
-
-        assertEquals(1, value.get());
+        scheduler.advanceTimeTo(5, TimeUnit.SECONDS);
+        observer.assertValue(1);
     }
 
     @Test
-    public void delayError() {
-        Single.error(new TestException()).delay(5, TimeUnit.SECONDS)
-        .test()
-        .awaitDone(1, TimeUnit.SECONDS)
-        .assertFailure(TestException.class);
+    public void delayOnError() {
+        final TestScheduler scheduler = new TestScheduler();
+        final TestObserver<?> observer = Single.error(new TestException())
+            .delay(5, TimeUnit.SECONDS, scheduler)
+            .test();
+
+        scheduler.triggerActions();
+        observer.assertError(TestException.class);
+    }
+
+    @Test
+    public void delayedErrorOnSuccess() {
+        final TestScheduler scheduler = new TestScheduler();
+        final TestObserver<Integer> observer = Single.just(1)
+            .delay(5, TimeUnit.SECONDS, scheduler, true)
+            .test();
+
+        scheduler.advanceTimeTo(2, TimeUnit.SECONDS);
+        observer.assertNoValues();
+
+        scheduler.advanceTimeTo(5, TimeUnit.SECONDS);
+        observer.assertValue(1);
+    }
+
+    @Test
+    public void delayedErrorOnError() {
+        final TestScheduler scheduler = new TestScheduler();
+        final TestObserver<?> observer = Single.error(new TestException())
+            .delay(5, TimeUnit.SECONDS, scheduler, true)
+            .test();
+
+        scheduler.advanceTimeTo(2, TimeUnit.SECONDS);
+        observer.assertNoErrors();
+
+        scheduler.advanceTimeTo(5, TimeUnit.SECONDS);
+        observer.assertError(TestException.class);
     }
 
     @Test
@@ -188,10 +213,10 @@ public class SingleDelayTest {
             Single.just(1)
             .delaySubscription(new Observable<Integer>() {
                 @Override
-                protected void subscribeActual(Observer<? super Integer> s) {
-                    s.onSubscribe(Disposables.empty());
-                    s.onNext(1);
-                    s.onError(new TestException());
+                protected void subscribeActual(Observer<? super Integer> observer) {
+                    observer.onSubscribe(Disposables.empty());
+                    observer.onNext(1);
+                    observer.onError(new TestException());
                 }
             })
             .test()
@@ -219,5 +244,29 @@ public class SingleDelayTest {
     @Test
     public void withCompletableDispose() {
         TestHelper.checkDisposed(Completable.complete().andThen(Single.just(1)));
+    }
+
+    @Test
+    public void withCompletableDoubleOnSubscribe() {
+
+        TestHelper.checkDoubleOnSubscribeCompletableToSingle(new Function<Completable, Single<Object>>() {
+            @Override
+            public Single<Object> apply(Completable c) throws Exception {
+                return c.andThen(Single.just((Object)1));
+            }
+        });
+
+    }
+
+    @Test
+    public void withSingleDoubleOnSubscribe() {
+
+        TestHelper.checkDoubleOnSubscribeSingle(new Function<Single<Object>, Single<Object>>() {
+            @Override
+            public Single<Object> apply(Single<Object> s) throws Exception {
+                return Single.just((Object)1).delaySubscription(s);
+            }
+        });
+
     }
 }

@@ -47,10 +47,10 @@ import io.reactivex.internal.util.EndConsumerHelper;
  * If for some reason this can't be avoided, use {@link io.reactivex.Flowable#safeSubscribe(org.reactivestreams.Subscriber)}
  * instead of the standard {@code subscribe()} method.
  *
- * <p>Example<code><pre>
+ * <p>Example<pre><code>
  * Disposable d =
  *     Flowable.range(1, 5)
- *     .subscribeWith(new DisposableSubscriber&lt;Integer>() {
+ *     .subscribeWith(new DisposableSubscriber&lt;Integer&gt;() {
  *         &#64;Override public void onStart() {
  *             request(1);
  *         }
@@ -70,15 +70,15 @@ import io.reactivex.internal.util.EndConsumerHelper;
  *     });
  * // ...
  * d.dispose();
- * </pre></code>
+ * </code></pre>
  * @param <T> the received value type.
  */
 public abstract class DisposableSubscriber<T> implements FlowableSubscriber<T>, Disposable {
-    final AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+    final AtomicReference<Subscription> upstream = new AtomicReference<Subscription>();
 
     @Override
     public final void onSubscribe(Subscription s) {
-        if (EndConsumerHelper.setOnce(this.s, s, getClass())) {
+        if (EndConsumerHelper.setOnce(this.upstream, s, getClass())) {
             onStart();
         }
     }
@@ -87,7 +87,7 @@ public abstract class DisposableSubscriber<T> implements FlowableSubscriber<T>, 
      * Called once the single upstream Subscription is set via onSubscribe.
      */
     protected void onStart() {
-        s.get().request(Long.MAX_VALUE);
+        upstream.get().request(Long.MAX_VALUE);
     }
 
     /**
@@ -99,7 +99,7 @@ public abstract class DisposableSubscriber<T> implements FlowableSubscriber<T>, 
      * @param n the request amount, positive
      */
     protected final void request(long n) {
-        s.get().request(n);
+        upstream.get().request(n);
     }
 
     /**
@@ -113,11 +113,11 @@ public abstract class DisposableSubscriber<T> implements FlowableSubscriber<T>, 
 
     @Override
     public final boolean isDisposed() {
-        return s.get() == SubscriptionHelper.CANCELLED;
+        return upstream.get() == SubscriptionHelper.CANCELLED;
     }
 
     @Override
     public final void dispose() {
-        SubscriptionHelper.cancel(s);
+        SubscriptionHelper.cancel(upstream);
     }
 }

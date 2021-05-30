@@ -466,7 +466,7 @@ public class FlowableNullTests {
 
     @Test(expected = NullPointerException.class)
     public void intervalRangeUnitNull() {
-        Flowable.intervalRange(1,1, 1, 1, null);
+        Flowable.intervalRange(1, 1, 1, 1, null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -999,7 +999,7 @@ public class FlowableNullTests {
 
     @Test(expected = NullPointerException.class)
     public void concatWithNull() {
-        just1.concatWith(null);
+        just1.concatWith((Publisher<Integer>)null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -1341,6 +1341,7 @@ public class FlowableNullTests {
     }
 
     @Test(expected = NullPointerException.class)
+    @Ignore("No longer crashes with NPE but signals it; tested elsewhere.")
     public void flatMapNotificationOnErrorReturnsNull() {
         Flowable.error(new TestException()).flatMap(new Function<Object, Publisher<Integer>>() {
             @Override
@@ -1619,7 +1620,7 @@ public class FlowableNullTests {
 
     @Test(expected = NullPointerException.class)
     public void mergeWithNull() {
-        just1.mergeWith(null);
+        just1.mergeWith((Publisher<Integer>)null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -1647,14 +1648,22 @@ public class FlowableNullTests {
         just1.onErrorResumeNext((Function<Throwable, Publisher<Integer>>)null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void onErrorResumeNextFunctionReturnsNull() {
-        Flowable.error(new TestException()).onErrorResumeNext(new Function<Throwable, Publisher<Object>>() {
-            @Override
-            public Publisher<Object> apply(Throwable e) {
-                return null;
-            }
-        }).blockingSubscribe();
+        try {
+            Flowable.error(new TestException()).onErrorResumeNext(new Function<Throwable, Publisher<Object>>() {
+                @Override
+                public Publisher<Object> apply(Throwable e) {
+                    return null;
+                }
+            }).blockingSubscribe();
+            fail("Should have thrown");
+        } catch (CompositeException ex) {
+            List<Throwable> errors = ex.getExceptions();
+            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertError(errors, 1, NullPointerException.class);
+            assertEquals(2, errors.size());
+        }
     }
 
     @Test(expected = NullPointerException.class)
@@ -1804,7 +1813,7 @@ public class FlowableNullTests {
     public void replaySelectorReturnsNull() {
         just1.replay(new Function<Flowable<Integer>, Publisher<Object>>() {
             @Override
-            public Publisher<Object> apply(Flowable<Integer> o) {
+            public Publisher<Object> apply(Flowable<Integer> f) {
                 return null;
             }
         }).blockingSubscribe();
@@ -2327,7 +2336,7 @@ public class FlowableNullTests {
 
     @Test(expected = NullPointerException.class)
     public void timeoutFirstItemReturnsNull() {
-        just1.timeout(just1, new Function<Integer, Publisher<Object>>() {
+        just1.timeout(Flowable.never(), new Function<Integer, Publisher<Object>>() {
             @Override
             public Publisher<Object> apply(Integer v) {
                 return null;
@@ -2348,6 +2357,11 @@ public class FlowableNullTests {
     @Test(expected = NullPointerException.class)
     public void toNull() {
         just1.to(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void asNull() {
+        just1.as(null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -2710,7 +2724,6 @@ public class FlowableNullTests {
         });
     }
 
-
     @Test(expected = NullPointerException.class)
     public void zipWithCombinerNull() {
         just1.zipWith(just1, null);
@@ -2732,72 +2745,72 @@ public class FlowableNullTests {
 
     @Test(expected = NullPointerException.class)
     public void asyncSubjectOnNextNull() {
-        FlowableProcessor<Integer> subject = AsyncProcessor.create();
-        subject.onNext(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = AsyncProcessor.create();
+        processor.onNext(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)
     public void asyncSubjectOnErrorNull() {
-        FlowableProcessor<Integer> subject = AsyncProcessor.create();
-        subject.onError(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = AsyncProcessor.create();
+        processor.onError(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)
     public void behaviorSubjectOnNextNull() {
-        FlowableProcessor<Integer> subject = BehaviorProcessor.create();
-        subject.onNext(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = BehaviorProcessor.create();
+        processor.onNext(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)
     public void behaviorSubjectOnErrorNull() {
-        FlowableProcessor<Integer> subject = BehaviorProcessor.create();
-        subject.onError(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = BehaviorProcessor.create();
+        processor.onError(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)
     public void publishSubjectOnNextNull() {
-        FlowableProcessor<Integer> subject = PublishProcessor.create();
-        subject.onNext(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = PublishProcessor.create();
+        processor.onNext(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)
     public void publishSubjectOnErrorNull() {
-        FlowableProcessor<Integer> subject = PublishProcessor.create();
-        subject.onError(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = PublishProcessor.create();
+        processor.onError(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)
     public void replaycSubjectOnNextNull() {
-        FlowableProcessor<Integer> subject = ReplayProcessor.create();
-        subject.onNext(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = ReplayProcessor.create();
+        processor.onNext(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)
     public void replaySubjectOnErrorNull() {
-        FlowableProcessor<Integer> subject = ReplayProcessor.create();
-        subject.onError(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = ReplayProcessor.create();
+        processor.onError(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)
     public void serializedcSubjectOnNextNull() {
-        FlowableProcessor<Integer> subject = PublishProcessor.<Integer>create().toSerialized();
-        subject.onNext(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = PublishProcessor.<Integer>create().toSerialized();
+        processor.onNext(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)
     public void serializedSubjectOnErrorNull() {
-        FlowableProcessor<Integer> subject = PublishProcessor.<Integer>create().toSerialized();
-        subject.onError(null);
-        subject.blockingSubscribe();
+        FlowableProcessor<Integer> processor = PublishProcessor.<Integer>create().toSerialized();
+        processor.onError(null);
+        processor.blockingSubscribe();
     }
 
     @Test(expected = NullPointerException.class)

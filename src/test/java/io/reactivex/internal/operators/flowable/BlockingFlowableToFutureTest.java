@@ -69,10 +69,10 @@ public class BlockingFlowableToFutureTest {
         Flowable<String> obs = Flowable.unsafeCreate(new Publisher<String>() {
 
             @Override
-            public void subscribe(Subscriber<? super String> observer) {
-                observer.onSubscribe(new BooleanSubscription());
-                observer.onNext("one");
-                observer.onError(new TestException());
+            public void subscribe(Subscriber<? super String> subscriber) {
+                subscriber.onSubscribe(new BooleanSubscription());
+                subscriber.onNext("one");
+                subscriber.onError(new TestException());
             }
         });
 
@@ -120,6 +120,6 @@ public class BlockingFlowableToFutureTest {
     public void testGetWithASingleNullItem() throws Exception {
         Flowable<String> obs = Flowable.just((String)null);
         Future<String> f = obs.toFuture();
-        assertEquals(null, f.get());
+        assertNull(f.get());
     }
 }

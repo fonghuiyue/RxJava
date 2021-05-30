@@ -28,7 +28,6 @@ import io.reactivex.internal.functions.Functions;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.processors.PublishProcessor;
-import io.reactivex.schedulers.Schedulers;
 
 public class SingleUsingTest {
 
@@ -102,11 +101,11 @@ public class SingleUsingTest {
 
     @Test
     public void eagerMapperThrowsDisposerThrows() {
-        TestObserver<Integer> ts = Single.using(Functions.justCallable(Disposables.empty()), mapperThrows, disposerThrows)
+        TestObserver<Integer> to = Single.using(Functions.justCallable(Disposables.empty()), mapperThrows, disposerThrows)
         .test()
         .assertFailure(CompositeException.class);
 
-        List<Throwable> ce = TestHelper.compositeList(ts.errors().get(0));
+        List<Throwable> ce = TestHelper.compositeList(to.errors().get(0));
         TestHelper.assertError(ce, 0, TestException.class, "Mapper");
         TestHelper.assertError(ce, 1, TestException.class, "Disposer");
     }
@@ -183,7 +182,7 @@ public class SingleUsingTest {
 
     @Test
     public void errorAndDisposerThrowsEager() {
-        TestObserver<Integer> ts = Single.using(Functions.justCallable(Disposables.empty()),
+        TestObserver<Integer> to = Single.using(Functions.justCallable(Disposables.empty()),
         new Function<Disposable, SingleSource<Integer>>() {
             @Override
             public SingleSource<Integer> apply(Disposable v) throws Exception {
@@ -193,7 +192,7 @@ public class SingleUsingTest {
         .test()
         .assertFailure(CompositeException.class);
 
-        List<Throwable> ce = TestHelper.compositeList(ts.errors().get(0));
+        List<Throwable> ce = TestHelper.compositeList(to.errors().get(0));
         TestHelper.assertError(ce, 0, TestException.class, "Mapper-run");
         TestHelper.assertError(ce, 1, TestException.class, "Disposer");
     }
@@ -220,12 +219,12 @@ public class SingleUsingTest {
 
     @Test
     public void successDisposeRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishProcessor<Integer> pp = PublishProcessor.create();
 
             Disposable d = Disposables.empty();
 
-            final TestObserver<Integer> ts = Single.using(Functions.justCallable(d), new Function<Disposable, SingleSource<Integer>>() {
+            final TestObserver<Integer> to = Single.using(Functions.justCallable(d), new Function<Disposable, SingleSource<Integer>>() {
                 @Override
                 public SingleSource<Integer> apply(Disposable v) throws Exception {
                     return pp.single(-99);
@@ -244,11 +243,11 @@ public class SingleUsingTest {
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    ts.cancel();
+                    to.cancel();
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             assertTrue(d.isDisposed());
         }
@@ -295,12 +294,12 @@ public class SingleUsingTest {
 
     @Test
     public void errorDisposeRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishProcessor<Integer> pp = PublishProcessor.create();
 
             Disposable d = Disposables.empty();
 
-            final TestObserver<Integer> ts = Single.using(Functions.justCallable(d), new Function<Disposable, SingleSource<Integer>>() {
+            final TestObserver<Integer> to = Single.using(Functions.justCallable(d), new Function<Disposable, SingleSource<Integer>>() {
                 @Override
                 public SingleSource<Integer> apply(Disposable v) throws Exception {
                     return pp.single(-99);
@@ -319,11 +318,11 @@ public class SingleUsingTest {
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    ts.cancel();
+                    to.cancel();
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             assertTrue(d.isDisposed());
         }

@@ -232,9 +232,9 @@ public class TestSchedulerTest {
         TimedRunnable r = new TimedRunnable((TestWorker) new TestScheduler().createWorker(), 5, new Runnable() {
             @Override
             public void run() {
-                // TODO Auto-generated method stub
-
+                // deliberately no-op
             }
+
             @Override
             public String toString() {
                 return "Runnable";
@@ -253,5 +253,10 @@ public class TestSchedulerTest {
         assertTrue(w.isDisposed());
     }
 
-
+    @Test
+    public void constructorTimeSetsTime() {
+        TestScheduler ts = new TestScheduler(5, TimeUnit.SECONDS);
+        assertEquals(5, ts.now(TimeUnit.SECONDS));
+        assertEquals(5000, ts.now(TimeUnit.MILLISECONDS));
+    }
 }

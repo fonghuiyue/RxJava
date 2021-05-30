@@ -53,7 +53,7 @@ extends AbstractFlowableWithUpstream<T, U> {
         final Callable<U> bufferSupplier;
         final Callable<? extends Publisher<B>> boundarySupplier;
 
-        Subscription s;
+        Subscription upstream;
 
         final AtomicReference<Disposable> other = new AtomicReference<Disposable>();
 
@@ -68,12 +68,12 @@ extends AbstractFlowableWithUpstream<T, U> {
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (!SubscriptionHelper.validate(this.s, s)) {
+            if (!SubscriptionHelper.validate(this.upstream, s)) {
                 return;
             }
-            this.s = s;
+            this.upstream = s;
 
-            Subscriber<? super U> actual = this.actual;
+            Subscriber<? super U> actual = this.downstream;
 
             U b;
 
@@ -127,7 +127,7 @@ extends AbstractFlowableWithUpstream<T, U> {
         @Override
         public void onError(Throwable t) {
             cancel();
-            actual.onError(t);
+            downstream.onError(t);
         }
 
         @Override
@@ -143,7 +143,7 @@ extends AbstractFlowableWithUpstream<T, U> {
             queue.offer(b);
             done = true;
             if (enter()) {
-                QueueDrainHelper.drainMaxLoop(queue, actual, false, this, this);
+                QueueDrainHelper.drainMaxLoop(queue, downstream, false, this, this);
             }
         }
 
@@ -156,7 +156,7 @@ extends AbstractFlowableWithUpstream<T, U> {
         public void cancel() {
             if (!cancelled) {
                 cancelled = true;
-                s.cancel();
+                upstream.cancel();
                 disposeOther();
 
                 if (enter()) {
@@ -178,7 +178,7 @@ extends AbstractFlowableWithUpstream<T, U> {
             } catch (Throwable e) {
                 Exceptions.throwIfFatal(e);
                 cancel();
-                actual.onError(e);
+                downstream.onError(e);
                 return;
             }
 
@@ -189,36 +189,32 @@ extends AbstractFlowableWithUpstream<T, U> {
             } catch (Throwable ex) {
                 Exceptions.throwIfFatal(ex);
                 cancelled = true;
-                s.cancel();
-                actual.onError(ex);
+                upstream.cancel();
+                downstream.onError(ex);
                 return;
             }
 
             BufferBoundarySubscriber<T, U, B> bs = new BufferBoundarySubscriber<T, U, B>(this);
 
-            Disposable o = other.get();
-
-            if (!other.compareAndSet(o, bs)) {
-                return;
-            }
-
-            U b;
-            synchronized (this) {
-                b = buffer;
-                if (b == null) {
-                    return;
+            if (DisposableHelper.replace(other, bs)) {
+                U b;
+                synchronized (this) {
+                    b = buffer;
+                    if (b == null) {
+                        return;
+                    }
+                    buffer = next;
                 }
-                buffer = next;
+
+                boundary.subscribe(bs);
+
+                fastPathEmitMax(b, false, this);
             }
-
-            boundary.subscribe(bs);
-
-            fastPathEmitMax(b, false, this);
         }
 
         @Override
         public void dispose() {
-            s.cancel();
+            upstream.cancel();
             disposeOther();
         }
 
@@ -229,7 +225,7 @@ extends AbstractFlowableWithUpstream<T, U> {
 
         @Override
         public boolean accept(Subscriber<? super U> a, U v) {
-            actual.onNext(v);
+            downstream.onNext(v);
             return true;
         }
 

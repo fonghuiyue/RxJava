@@ -48,8 +48,8 @@ public class FlowableDoOnLifecycleTest {
 
         TestHelper.checkDoubleOnSubscribeFlowable(new Function<Flowable<Object>, Publisher<Object>>() {
             @Override
-            public Publisher<Object> apply(Flowable<Object> o) throws Exception {
-                return o
+            public Publisher<Object> apply(Flowable<Object> f) throws Exception {
+                return f
                 .doOnLifecycle(new Consumer<Subscription>() {
                     @Override
                     public void accept(Subscription s) throws Exception {
@@ -87,7 +87,7 @@ public class FlowableDoOnLifecycleTest {
             );
 
         assertEquals(1, calls[0]);
-        assertEquals(2, calls[1]);
+        assertEquals(1, calls[1]);
     }
 
     @Test

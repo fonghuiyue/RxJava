@@ -92,14 +92,6 @@ public enum SubscriptionHelper implements Subscription {
     public static void reportMoreProduced(long n) {
         RxJavaPlugins.onError(new ProtocolViolationException("More produced than requested: " + n));
     }
-    /**
-     * Check if the given subscription is the common cancelled subscription.
-     * @param s the subscription to check
-     * @return true if the subscription is the common cancelled subscription
-     */
-    public static boolean isCancelled(Subscription s) {
-        return s == CANCELLED;
-    }
 
     /**
      * Atomically sets the subscription on the field and cancels the
@@ -137,7 +129,7 @@ public enum SubscriptionHelper implements Subscription {
      * @return true if the operation succeeded, false if the target field was not null.
      */
     public static boolean setOnce(AtomicReference<Subscription> field, Subscription s) {
-        ObjectHelper.requireNonNull(s, "d is null");
+        ObjectHelper.requireNonNull(s, "s is null");
         if (!field.compareAndSet(null, s)) {
             s.cancel();
             if (field.get() != CANCELLED) {
@@ -238,5 +230,25 @@ public enum SubscriptionHelper implements Subscription {
                 }
             }
         }
+    }
+
+    /**
+     * Atomically sets the subscription on the field if it is still null and issues a positive request
+     * to the given {@link Subscription}.
+     * <p>
+     * If the field is not null and doesn't contain the {@link #CANCELLED}
+     * instance, the {@link #reportSubscriptionSet()} is called.
+     * @param field the target field
+     * @param s the new subscription to set
+     * @param request the amount to request, positive (not verified)
+     * @return true if the operation succeeded, false if the target field was not null.
+     * @since 2.1.11
+     */
+    public static boolean setOnce(AtomicReference<Subscription> field, Subscription s, long request) {
+        if (setOnce(field, s)) {
+            s.request(request);
+            return true;
+        }
+        return false;
     }
 }

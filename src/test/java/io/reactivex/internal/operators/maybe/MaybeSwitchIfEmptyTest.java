@@ -22,7 +22,6 @@ import io.reactivex.exceptions.TestException;
 import io.reactivex.functions.Function;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.processors.PublishProcessor;
-import io.reactivex.schedulers.Schedulers;
 
 public class MaybeSwitchIfEmptyTest {
 
@@ -68,15 +67,14 @@ public class MaybeSwitchIfEmptyTest {
     public void dispose() {
         PublishProcessor<Integer> pp = PublishProcessor.create();
 
-        TestObserver<Integer> ts = pp.singleElement().switchIfEmpty(Maybe.just(2)).test();
+        TestObserver<Integer> to = pp.singleElement().switchIfEmpty(Maybe.just(2)).test();
 
         assertTrue(pp.hasSubscribers());
 
-        ts.cancel();
+        to.cancel();
 
         assertFalse(pp.hasSubscribers());
     }
-
 
     @Test
     public void isDisposed() {
@@ -97,10 +95,10 @@ public class MaybeSwitchIfEmptyTest {
 
     @Test
     public void emptyCancelRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishProcessor<Integer> pp = PublishProcessor.create();
 
-            final TestObserver<Integer> ts = pp.singleElement().switchIfEmpty(Maybe.just(2)).test();
+            final TestObserver<Integer> to = pp.singleElement().switchIfEmpty(Maybe.just(2)).test();
 
             Runnable r1 = new Runnable() {
                 @Override
@@ -112,11 +110,11 @@ public class MaybeSwitchIfEmptyTest {
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    ts.cancel();
+                    to.cancel();
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 }

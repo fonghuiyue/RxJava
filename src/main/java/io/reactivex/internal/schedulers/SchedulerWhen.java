@@ -24,12 +24,11 @@ import io.reactivex.CompletableObserver;
 import io.reactivex.Flowable;
 import io.reactivex.Observable;
 import io.reactivex.Scheduler;
-import io.reactivex.annotations.Experimental;
 import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.disposables.Disposables;
-import io.reactivex.exceptions.Exceptions;
 import io.reactivex.functions.Function;
+import io.reactivex.internal.util.ExceptionHelper;
 import io.reactivex.processors.FlowableProcessor;
 import io.reactivex.processors.UnicastProcessor;
 
@@ -100,8 +99,9 @@ import io.reactivex.processors.UnicastProcessor;
  *  }));
  * });
  * </pre>
+ * <p>History 2.0.1 - experimental
+ * @since 2.1
  */
-@Experimental
 public class SchedulerWhen extends Scheduler implements Disposable {
     private final Scheduler actualScheduler;
     private final FlowableProcessor<Flowable<Completable>> workerProcessor;
@@ -116,7 +116,7 @@ public class SchedulerWhen extends Scheduler implements Disposable {
         try {
             disposable = combine.apply(workerProcessor).subscribe();
         } catch (Throwable e) {
-            Exceptions.propagate(e);
+            throw ExceptionHelper.wrapOrThrow(e);
         }
     }
 
@@ -155,7 +155,7 @@ public class SchedulerWhen extends Scheduler implements Disposable {
     static final Disposable DISPOSED = Disposables.disposed();
 
     @SuppressWarnings("serial")
-    abstract static class ScheduledAction extends AtomicReference<Disposable>implements Disposable {
+    abstract static class ScheduledAction extends AtomicReference<Disposable> implements Disposable {
         ScheduledAction() {
             super(SUBSCRIBED);
         }

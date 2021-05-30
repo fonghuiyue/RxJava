@@ -14,7 +14,6 @@
 package io.reactivex.internal.operators.flowable;
 
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.util.*;
@@ -143,29 +142,29 @@ public class FlowableDistinctTest {
 
     @Test
     public void fusedSync() {
-        TestSubscriber<Integer> to = SubscriberFusion.newTest(QueueDisposable.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         Flowable.just(1, 1, 2, 1, 3, 2, 4, 5, 4)
         .distinct()
-        .subscribe(to);
+        .subscribe(ts);
 
-        SubscriberFusion.assertFusion(to, QueueDisposable.SYNC)
+        SubscriberFusion.assertFusion(ts, QueueFuseable.SYNC)
         .assertResult(1, 2, 3, 4, 5);
     }
 
     @Test
     public void fusedAsync() {
-        TestSubscriber<Integer> to = SubscriberFusion.newTest(QueueDisposable.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         UnicastProcessor<Integer> us = UnicastProcessor.create();
 
         us
         .distinct()
-        .subscribe(to);
+        .subscribe(ts);
 
         TestHelper.emit(us, 1, 1, 2, 1, 3, 2, 4, 5, 4);
 
-        SubscriberFusion.assertFusion(to, QueueDisposable.ASYNC)
+        SubscriberFusion.assertFusion(ts, QueueFuseable.ASYNC)
         .assertResult(1, 2, 3, 4, 5);
     }
 
@@ -175,14 +174,14 @@ public class FlowableDistinctTest {
         .distinct()
         .subscribe(new FlowableSubscriber<Integer>() {
             @Override
-            public void onSubscribe(Subscription d) {
-                QueueSubscription<?> qd = (QueueSubscription<?>)d;
+            public void onSubscribe(Subscription s) {
+                QueueSubscription<?> qs = (QueueSubscription<?>)s;
 
-                assertFalse(qd.isEmpty());
+                assertFalse(qs.isEmpty());
 
-                qd.clear();
+                qs.clear();
 
-                assertTrue(qd.isEmpty());
+                assertTrue(qs.isEmpty());
             }
 
             @Override
@@ -232,14 +231,14 @@ public class FlowableDistinctTest {
         try {
             new Flowable<Integer>() {
                 @Override
-                protected void subscribeActual(Subscriber<? super Integer> observer) {
-                    observer.onSubscribe(new BooleanSubscription());
+                protected void subscribeActual(Subscriber<? super Integer> subscriber) {
+                    subscriber.onSubscribe(new BooleanSubscription());
 
-                    observer.onNext(1);
-                    observer.onComplete();
-                    observer.onNext(2);
-                    observer.onError(new TestException());
-                    observer.onComplete();
+                    subscriber.onNext(1);
+                    subscriber.onComplete();
+                    subscriber.onNext(2);
+                    subscriber.onError(new TestException());
+                    subscriber.onComplete();
                 }
             }
             .distinct()

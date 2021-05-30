@@ -52,8 +52,8 @@ public class ObservableUsingTest {
     private final Consumer<Disposable> disposeSubscription = new Consumer<Disposable>() {
 
         @Override
-        public void accept(Disposable s) {
-            s.dispose();
+        public void accept(Disposable d) {
+            d.dispose();
         }
 
     };
@@ -185,7 +185,7 @@ public class ObservableUsingTest {
 
         Function<Disposable, Observable<Integer>> observableFactory = new Function<Disposable, Observable<Integer>>() {
             @Override
-            public Observable<Integer> apply(Disposable s) {
+            public Observable<Integer> apply(Disposable d) {
                 return Observable.empty();
             }
         };
@@ -329,8 +329,6 @@ public class ObservableUsingTest {
         assertEquals(Arrays.asList("completed", /*"unsub",*/ "disposed"), events);
 
     }
-
-
 
     @Test
     public void testUsingDisposesEagerlyBeforeError() {
@@ -556,5 +554,56 @@ public class ObservableUsingTest {
         } finally {
             RxJavaPlugins.reset();
         }
+    }
+
+    @Test
+    public void sourceSupplierReturnsNull() {
+        Observable.using(Functions.justCallable(1),
+                Functions.justFunction((Observable<Object>)null),
+                Functions.emptyConsumer())
+        .test()
+        .assertFailureAndMessage(NullPointerException.class, "The sourceSupplier returned a null ObservableSource")
+        ;
+    }
+
+    @Test
+    public void doubleOnSubscribe() {
+        TestHelper.checkDoubleOnSubscribeObservable(new Function<Observable<Object>, ObservableSource<Object>>() {
+            @Override
+            public ObservableSource<Object> apply(Observable<Object> o)
+                    throws Exception {
+                return Observable.using(Functions.justCallable(1), Functions.justFunction(o), Functions.emptyConsumer());
+            }
+        });
+    }
+
+    @Test
+    public void eagerDisposedOnComplete() {
+        final TestObserver<Integer> to = new TestObserver<Integer>();
+
+        Observable.using(Functions.justCallable(1), Functions.justFunction(new Observable<Integer>() {
+            @Override
+            protected void subscribeActual(Observer<? super Integer> observer) {
+                observer.onSubscribe(Disposables.empty());
+                to.cancel();
+                observer.onComplete();
+            }
+        }), Functions.emptyConsumer(), true)
+        .subscribe(to);
+    }
+
+    @Test
+    public void eagerDisposedOnError() {
+        final TestObserver<Integer> to = new TestObserver<Integer>();
+
+        Observable.using(Functions.justCallable(1), Functions.justFunction(new Observable<Integer>() {
+            @Override
+            protected void subscribeActual(Observer<? super Integer> observer) {
+                observer.onSubscribe(Disposables.empty());
+                to.cancel();
+                observer.onError(new TestException());
+            }
+        }), Functions.emptyConsumer(), true)
+        .subscribe(to);
     }
 }

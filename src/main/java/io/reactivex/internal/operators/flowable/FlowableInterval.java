@@ -19,9 +19,11 @@ import java.util.concurrent.atomic.*;
 import org.reactivestreams.*;
 
 import io.reactivex.*;
+import io.reactivex.Scheduler.Worker;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.exceptions.MissingBackpressureException;
 import io.reactivex.internal.disposables.DisposableHelper;
+import io.reactivex.internal.schedulers.TrampolineScheduler;
 import io.reactivex.internal.subscriptions.SubscriptionHelper;
 import io.reactivex.internal.util.BackpressureHelper;
 
@@ -43,9 +45,16 @@ public final class FlowableInterval extends Flowable<Long> {
         IntervalSubscriber is = new IntervalSubscriber(s);
         s.onSubscribe(is);
 
-        Disposable d = scheduler.schedulePeriodicallyDirect(is, initialDelay, period, unit);
+        Scheduler sch = scheduler;
 
-        is.setResource(d);
+        if (sch instanceof TrampolineScheduler) {
+            Worker worker = sch.createWorker();
+            is.setResource(worker);
+            worker.schedulePeriodically(is, initialDelay, period, unit);
+        } else {
+            Disposable d = sch.schedulePeriodicallyDirect(is, initialDelay, period, unit);
+            is.setResource(d);
+        }
     }
 
     static final class IntervalSubscriber extends AtomicLong
@@ -53,14 +62,14 @@ public final class FlowableInterval extends Flowable<Long> {
 
         private static final long serialVersionUID = -2809475196591179431L;
 
-        final Subscriber<? super Long> actual;
+        final Subscriber<? super Long> downstream;
 
         long count;
 
         final AtomicReference<Disposable> resource = new AtomicReference<Disposable>();
 
-        IntervalSubscriber(Subscriber<? super Long> actual) {
-            this.actual = actual;
+        IntervalSubscriber(Subscriber<? super Long> downstream) {
+            this.downstream = downstream;
         }
 
         @Override
@@ -81,10 +90,10 @@ public final class FlowableInterval extends Flowable<Long> {
                 long r = get();
 
                 if (r != 0L) {
-                    actual.onNext(count++);
+                    downstream.onNext(count++);
                     BackpressureHelper.produced(this, 1);
                 } else {
-                    actual.onError(new MissingBackpressureException("Can't deliver value " + count + " due to lack of requests"));
+                    downstream.onError(new MissingBackpressureException("Can't deliver value " + count + " due to lack of requests"));
                     DisposableHelper.dispose(resource);
                 }
             }

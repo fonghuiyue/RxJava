@@ -52,7 +52,7 @@ public final class ObservableFlatMapCompletable<T> extends AbstractObservableWit
     implements Observer<T> {
         private static final long serialVersionUID = 8443155186132538303L;
 
-        final Observer<? super T> actual;
+        final Observer<? super T> downstream;
 
         final AtomicThrowable errors;
 
@@ -62,10 +62,12 @@ public final class ObservableFlatMapCompletable<T> extends AbstractObservableWit
 
         final CompositeDisposable set;
 
-        Disposable d;
+        Disposable upstream;
+
+        volatile boolean disposed;
 
         FlatMapCompletableMainObserver(Observer<? super T> observer, Function<? super T, ? extends CompletableSource> mapper, boolean delayErrors) {
-            this.actual = observer;
+            this.downstream = observer;
             this.mapper = mapper;
             this.delayErrors = delayErrors;
             this.errors = new AtomicThrowable();
@@ -75,10 +77,10 @@ public final class ObservableFlatMapCompletable<T> extends AbstractObservableWit
 
         @Override
         public void onSubscribe(Disposable d) {
-            if (DisposableHelper.validate(this.d, d)) {
-                this.d = d;
+            if (DisposableHelper.validate(this.upstream, d)) {
+                this.upstream = d;
 
-                actual.onSubscribe(this);
+                downstream.onSubscribe(this);
             }
         }
 
@@ -90,7 +92,7 @@ public final class ObservableFlatMapCompletable<T> extends AbstractObservableWit
                 cs = ObjectHelper.requireNonNull(mapper.apply(value), "The mapper returned a null CompletableSource");
             } catch (Throwable ex) {
                 Exceptions.throwIfFatal(ex);
-                d.dispose();
+                upstream.dispose();
                 onError(ex);
                 return;
             }
@@ -99,7 +101,7 @@ public final class ObservableFlatMapCompletable<T> extends AbstractObservableWit
 
             InnerObserver inner = new InnerObserver();
 
-            if (set.add(inner)) {
+            if (!disposed && set.add(inner)) {
                 cs.subscribe(inner);
             }
         }
@@ -110,13 +112,13 @@ public final class ObservableFlatMapCompletable<T> extends AbstractObservableWit
                 if (delayErrors) {
                     if (decrementAndGet() == 0) {
                         Throwable ex = errors.terminate();
-                        actual.onError(ex);
+                        downstream.onError(ex);
                     }
                 } else {
                     dispose();
                     if (getAndSet(0) > 0) {
                         Throwable ex = errors.terminate();
-                        actual.onError(ex);
+                        downstream.onError(ex);
                     }
                 }
             } else {
@@ -129,22 +131,23 @@ public final class ObservableFlatMapCompletable<T> extends AbstractObservableWit
             if (decrementAndGet() == 0) {
                 Throwable ex = errors.terminate();
                 if (ex != null) {
-                    actual.onError(ex);
+                    downstream.onError(ex);
                 } else {
-                    actual.onComplete();
+                    downstream.onComplete();
                 }
             }
         }
 
         @Override
         public void dispose() {
-            d.dispose();
+            disposed = true;
+            upstream.dispose();
             set.dispose();
         }
 
         @Override
         public boolean isDisposed() {
-            return d.isDisposed();
+            return upstream.isDisposed();
         }
 
         @Nullable

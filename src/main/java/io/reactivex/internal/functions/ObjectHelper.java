@@ -71,7 +71,7 @@ public final class ObjectHelper {
     }
 
     /**
-     * Compares two integer values similar to Long.compare.
+     * Compares two long values similar to Long.compare.
      * @param v1 the first value
      * @param v2 the second value
      * @return the comparison result
@@ -127,5 +127,18 @@ public final class ObjectHelper {
         public boolean test(Object o1, Object o2) {
             return ObjectHelper.equals(o1, o2);
         }
+    }
+
+    /**
+     * Trap null-check attempts on primitives.
+     * @param value the value to check
+     * @param message the message to print
+     * @return the value
+     * @deprecated this method should not be used as there is no need
+     * to check primitives for nullness.
+     */
+    @Deprecated
+    public static long requireNonNull(long value, String message) {
+        throw new InternalError("Null check on a primitive: " + message);
     }
 }

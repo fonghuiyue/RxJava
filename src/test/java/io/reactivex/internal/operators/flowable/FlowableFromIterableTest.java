@@ -14,7 +14,6 @@
 package io.reactivex.internal.operators.flowable;
 
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.*;
@@ -46,15 +45,15 @@ public class FlowableFromIterableTest {
     public void testListIterable() {
         Flowable<String> flowable = Flowable.fromIterable(Arrays.<String> asList("one", "two", "three"));
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
 
-        flowable.subscribe(observer);
+        flowable.subscribe(subscriber);
 
-        verify(observer, times(1)).onNext("one");
-        verify(observer, times(1)).onNext("two");
-        verify(observer, times(1)).onNext("three");
-        verify(observer, Mockito.never()).onError(any(Throwable.class));
-        verify(observer, times(1)).onComplete();
+        verify(subscriber, times(1)).onNext("one");
+        verify(subscriber, times(1)).onNext("two");
+        verify(subscriber, times(1)).onNext("three");
+        verify(subscriber, Mockito.never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
     }
 
     /**
@@ -90,30 +89,30 @@ public class FlowableFromIterableTest {
         };
         Flowable<String> flowable = Flowable.fromIterable(it);
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
 
-        flowable.subscribe(observer);
+        flowable.subscribe(subscriber);
 
-        verify(observer, times(1)).onNext("1");
-        verify(observer, times(1)).onNext("2");
-        verify(observer, times(1)).onNext("3");
-        verify(observer, Mockito.never()).onError(any(Throwable.class));
-        verify(observer, times(1)).onComplete();
+        verify(subscriber, times(1)).onNext("1");
+        verify(subscriber, times(1)).onNext("2");
+        verify(subscriber, times(1)).onNext("3");
+        verify(subscriber, Mockito.never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
     }
 
     @Test
     public void testObservableFromIterable() {
         Flowable<String> flowable = Flowable.fromIterable(Arrays.<String> asList("one", "two", "three"));
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
 
-        flowable.subscribe(observer);
+        flowable.subscribe(subscriber);
 
-        verify(observer, times(1)).onNext("one");
-        verify(observer, times(1)).onNext("two");
-        verify(observer, times(1)).onNext("three");
-        verify(observer, Mockito.never()).onError(any(Throwable.class));
-        verify(observer, times(1)).onComplete();
+        verify(subscriber, times(1)).onNext("one");
+        verify(subscriber, times(1)).onNext("two");
+        verify(subscriber, times(1)).onNext("three");
+        verify(subscriber, Mockito.never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
     }
 
     @Test
@@ -122,14 +121,14 @@ public class FlowableFromIterableTest {
         for (int i = 1; i <= Flowable.bufferSize() + 1; i++) {
             list.add(i);
         }
-        Flowable<Integer> o = Flowable.fromIterable(list);
+        Flowable<Integer> f = Flowable.fromIterable(list);
 
         TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
 
         ts.assertNoValues();
         ts.request(1);
 
-        o.subscribe(ts);
+        f.subscribe(ts);
 
         ts.assertValue(1);
         ts.request(2);
@@ -142,14 +141,14 @@ public class FlowableFromIterableTest {
 
     @Test
     public void testNoBackpressure() {
-        Flowable<Integer> o = Flowable.fromIterable(Arrays.asList(1, 2, 3, 4, 5));
+        Flowable<Integer> f = Flowable.fromIterable(Arrays.asList(1, 2, 3, 4, 5));
 
         TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
 
         ts.assertNoValues();
         ts.request(Long.MAX_VALUE); // infinite
 
-        o.subscribe(ts);
+        f.subscribe(ts);
 
         ts.assertValues(1, 2, 3, 4, 5);
         ts.assertTerminated();
@@ -157,12 +156,12 @@ public class FlowableFromIterableTest {
 
     @Test
     public void testSubscribeMultipleTimes() {
-        Flowable<Integer> o = Flowable.fromIterable(Arrays.asList(1, 2, 3));
+        Flowable<Integer> f = Flowable.fromIterable(Arrays.asList(1, 2, 3));
 
         for (int i = 0; i < 10; i++) {
             TestSubscriber<Integer> ts = new TestSubscriber<Integer>();
 
-            o.subscribe(ts);
+            f.subscribe(ts);
 
             ts.assertValues(1, 2, 3);
             ts.assertNoErrors();
@@ -172,12 +171,12 @@ public class FlowableFromIterableTest {
 
     @Test
     public void testFromIterableRequestOverflow() throws InterruptedException {
-        Flowable<Integer> o = Flowable.fromIterable(Arrays.asList(1,2,3,4));
+        Flowable<Integer> f = Flowable.fromIterable(Arrays.asList(1, 2, 3, 4));
 
         final int expectedCount = 4;
         final CountDownLatch latch = new CountDownLatch(expectedCount);
 
-        o.subscribeOn(Schedulers.computation())
+        f.subscribeOn(Schedulers.computation())
         .subscribe(new DefaultSubscriber<Integer>() {
 
             @Override
@@ -551,7 +550,7 @@ public class FlowableFromIterableTest {
 
     @Test
     public void fusionWithConcatMap() {
-        TestSubscriber<Integer> to = new TestSubscriber<Integer>();
+        TestSubscriber<Integer> ts = new TestSubscriber<Integer>();
 
         Flowable.fromIterable(Arrays.asList(1, 2, 3, 4)).concatMap(
         new Function<Integer, Flowable  <Integer>>() {
@@ -559,11 +558,11 @@ public class FlowableFromIterableTest {
             public Flowable<Integer> apply(Integer v) {
                 return Flowable.range(v, 2);
             }
-        }).subscribe(to);
+        }).subscribe(ts);
 
-        to.assertValues(1, 2, 2, 3, 3, 4, 4, 5);
-        to.assertNoErrors();
-        to.assertComplete();
+        ts.assertValues(1, 2, 2, 3, 3, 4, 4, 5);
+        ts.assertNoErrors();
+        ts.assertComplete();
     }
 
     @Test
@@ -722,7 +721,7 @@ public class FlowableFromIterableTest {
 
     @Test
     public void requestRaceConditional() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
 
             Runnable r = new Runnable() {
@@ -736,13 +735,13 @@ public class FlowableFromIterableTest {
             .filter(Functions.alwaysTrue())
             .subscribe(ts);
 
-            TestHelper.race(r, r, Schedulers.single());
+            TestHelper.race(r, r);
         }
     }
 
     @Test
     public void requestRaceConditional2() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
 
             Runnable r = new Runnable() {
@@ -756,13 +755,13 @@ public class FlowableFromIterableTest {
             .filter(Functions.alwaysFalse())
             .subscribe(ts);
 
-            TestHelper.race(r, r, Schedulers.single());
+            TestHelper.race(r, r);
         }
     }
 
     @Test
     public void requestCancelConditionalRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
 
             Runnable r1 = new Runnable() {
@@ -783,13 +782,13 @@ public class FlowableFromIterableTest {
             .filter(Functions.alwaysTrue())
             .subscribe(ts);
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 
     @Test
     public void requestCancelConditionalRace2() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
 
             Runnable r1 = new Runnable() {
@@ -810,13 +809,13 @@ public class FlowableFromIterableTest {
             .filter(Functions.alwaysTrue())
             .subscribe(ts);
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 
     @Test
     public void requestCancelRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
 
             Runnable r1 = new Runnable() {
@@ -836,13 +835,13 @@ public class FlowableFromIterableTest {
             Flowable.fromIterable(Arrays.asList(1, 2, 3, 4))
             .subscribe(ts);
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 
     @Test
     public void requestCancelRace2() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final TestSubscriber<Integer> ts = new TestSubscriber<Integer>(0L);
 
             Runnable r1 = new Runnable() {
@@ -862,18 +861,18 @@ public class FlowableFromIterableTest {
             Flowable.fromIterable(Arrays.asList(1, 2, 3, 4))
             .subscribe(ts);
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 
     @Test
     public void fusionRejected() {
-        TestSubscriber<Integer> to = SubscriberFusion.newTest(QueueDisposable.ASYNC);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ASYNC);
 
         Flowable.fromIterable(Arrays.asList(1, 2, 3))
-        .subscribe(to);
+        .subscribe(ts);
 
-        SubscriberFusion.assertFusion(to, QueueDisposable.NONE)
+        SubscriberFusion.assertFusion(ts, QueueFuseable.NONE)
         .assertResult(1, 2, 3);
     }
 
@@ -882,21 +881,21 @@ public class FlowableFromIterableTest {
         Flowable.fromIterable(Arrays.asList(1, 2, 3))
         .subscribe(new FlowableSubscriber<Integer>() {
             @Override
-            public void onSubscribe(Subscription d) {
+            public void onSubscribe(Subscription s) {
                 @SuppressWarnings("unchecked")
-                QueueSubscription<Integer> qd = (QueueSubscription<Integer>)d;
+                QueueSubscription<Integer> qs = (QueueSubscription<Integer>)s;
 
-                qd.requestFusion(QueueSubscription.ANY);
+                qs.requestFusion(QueueFuseable.ANY);
 
                 try {
-                    assertEquals(1, qd.poll().intValue());
+                    assertEquals(1, qs.poll().intValue());
                 } catch (Throwable ex) {
                     fail(ex.toString());
                 }
 
-                qd.clear();
+                qs.clear();
                 try {
-                    assertNull(qd.poll());
+                    assertNull(qs.poll());
                 } catch (Throwable ex) {
                     fail(ex.toString());
                 }
@@ -932,7 +931,7 @@ public class FlowableFromIterableTest {
 
     @Test
     public void hasNextCancels() {
-        final TestSubscriber<Integer> to = new TestSubscriber<Integer>();
+        final TestSubscriber<Integer> ts = new TestSubscriber<Integer>();
 
         Flowable.fromIterable(new Iterable<Integer>() {
             @Override
@@ -943,7 +942,7 @@ public class FlowableFromIterableTest {
                     @Override
                     public boolean hasNext() {
                         if (++count == 2) {
-                            to.cancel();
+                            ts.cancel();
                         }
                         return true;
                     }
@@ -960,9 +959,9 @@ public class FlowableFromIterableTest {
                 };
             }
         })
-        .subscribe(to);
+        .subscribe(ts);
 
-        to.assertValue(1)
+        ts.assertValue(1)
         .assertNoErrors()
         .assertNotComplete();
     }

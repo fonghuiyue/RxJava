@@ -145,8 +145,8 @@ public class ObservableTakeWhileTest {
 
     @Test
     public void testUnsubscribeAfterTake() {
-        Disposable s = mock(Disposable.class);
-        TestObservable w = new TestObservable(s, "one", "two", "three");
+        Disposable upstream = mock(Disposable.class);
+        TestObservable w = new TestObservable(upstream, "one", "two", "three");
 
         Observer<String> observer = TestHelper.mockObserver();
         Observable<String> take = Observable.unsafeCreate(w)
@@ -172,24 +172,24 @@ public class ObservableTakeWhileTest {
         verify(observer, times(1)).onNext("one");
         verify(observer, never()).onNext("two");
         verify(observer, never()).onNext("three");
-        verify(s, times(1)).dispose();
+        verify(upstream, times(1)).dispose();
     }
 
     private static class TestObservable implements ObservableSource<String> {
 
-        final Disposable s;
+        final Disposable upstream;
         final String[] values;
         Thread t;
 
-        TestObservable(Disposable s, String... values) {
-            this.s = s;
+        TestObservable(Disposable upstream, String... values) {
+            this.upstream = upstream;
             this.values = values;
         }
 
         @Override
         public void subscribe(final Observer<? super String> observer) {
             System.out.println("TestObservable subscribed to ...");
-            observer.onSubscribe(s);
+            observer.onSubscribe(upstream);
             t = new Thread(new Runnable() {
 
                 @Override
@@ -221,12 +221,12 @@ public class ObservableTakeWhileTest {
                 return t1 < 2;
             }
         });
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        source.subscribe(ts);
+        source.subscribe(to);
 
-        ts.assertNoErrors();
-        ts.assertValue(1);
+        to.assertNoErrors();
+        to.assertValue(1);
 
         // 2.0.2 - not anymore
 //        Assert.assertTrue("Not cancelled!", ts.isCancelled());
@@ -234,17 +234,17 @@ public class ObservableTakeWhileTest {
 
     @Test
     public void testErrorCauseIncludesLastValue() {
-        TestObserver<String> ts = new TestObserver<String>();
+        TestObserver<String> to = new TestObserver<String>();
         Observable.just("abc").takeWhile(new Predicate<String>() {
             @Override
             public boolean test(String t1) {
                 throw new TestException();
             }
-        }).subscribe(ts);
+        }).subscribe(to);
 
-        ts.assertTerminated();
-        ts.assertNoValues();
-        ts.assertError(TestException.class);
+        to.assertTerminated();
+        to.assertNoValues();
+        to.assertError(TestException.class);
         // FIXME last cause value not recorded
 //        assertTrue(ts.getOnErrorEvents().get(0).getCause().getMessage().contains("abc"));
     }

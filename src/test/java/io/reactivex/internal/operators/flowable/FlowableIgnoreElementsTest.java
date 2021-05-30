@@ -18,12 +18,12 @@ import static org.junit.Assert.*;
 import java.util.concurrent.atomic.*;
 
 import org.junit.Test;
-import org.reactivestreams.*;
+import org.reactivestreams.Subscription;
 
 import io.reactivex.*;
 import io.reactivex.exceptions.TestException;
 import io.reactivex.functions.*;
-import io.reactivex.internal.fuseable.QueueSubscription;
+import io.reactivex.internal.fuseable.*;
 import io.reactivex.observers.*;
 import io.reactivex.processors.PublishProcessor;
 import io.reactivex.subscribers.*;
@@ -65,8 +65,6 @@ public class FlowableIgnoreElementsTest {
         ts.assertNoErrors();
         ts.assertNoValues();
         ts.assertTerminated();
-        // FIXME no longer testable
-//        ts.assertUnsubscribed();
     }
 
     @Test
@@ -76,8 +74,6 @@ public class FlowableIgnoreElementsTest {
         Flowable.error(ex).ignoreElements().toFlowable().subscribe(ts);
         ts.assertNoValues();
         ts.assertTerminated();
-        // FIXME no longer testable
-//        ts.assertUnsubscribed();
         ts.assertError(TestException.class);
         ts.assertErrorMessage("boo");
     }
@@ -148,7 +144,6 @@ public class FlowableIgnoreElementsTest {
         assertEquals(0, count.get());
     }
 
-
     @Test
     public void testWithEmpty() {
         assertNull(Flowable.empty().ignoreElements().blockingGet());
@@ -178,26 +173,22 @@ public class FlowableIgnoreElementsTest {
 
     @Test
     public void testCompletedOk() {
-        TestObserver<Object> ts = new TestObserver<Object>();
-        Flowable.range(1, 10).ignoreElements().subscribe(ts);
-        ts.assertNoErrors();
-        ts.assertNoValues();
-        ts.assertTerminated();
-        // FIXME no longer testable
-//        ts.assertUnsubscribed();
+        TestObserver<Object> to = new TestObserver<Object>();
+        Flowable.range(1, 10).ignoreElements().subscribe(to);
+        to.assertNoErrors();
+        to.assertNoValues();
+        to.assertTerminated();
     }
 
     @Test
     public void testErrorReceived() {
-        TestObserver<Object> ts = new TestObserver<Object>();
+        TestObserver<Object> to = new TestObserver<Object>();
         TestException ex = new TestException("boo");
-        Flowable.error(ex).ignoreElements().subscribe(ts);
-        ts.assertNoValues();
-        ts.assertTerminated();
-        // FIXME no longer testable
-//        ts.assertUnsubscribed();
-        ts.assertError(TestException.class);
-        ts.assertErrorMessage("boo");
+        Flowable.error(ex).ignoreElements().subscribe(to);
+        to.assertNoValues();
+        to.assertTerminated();
+        to.assertError(TestException.class);
+        to.assertErrorMessage("boo");
     }
 
     @Test
@@ -260,13 +251,13 @@ public class FlowableIgnoreElementsTest {
 
     @Test
     public void fused() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         Flowable.just(1).hide().ignoreElements().<Integer>toFlowable()
         .subscribe(ts);
 
         ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.ASYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult();
     }
 
@@ -332,5 +323,24 @@ public class FlowableIgnoreElementsTest {
         TestHelper.checkDisposed(Flowable.just(1).ignoreElements());
 
         TestHelper.checkDisposed(Flowable.just(1).ignoreElements().toFlowable());
+    }
+
+    @Test
+    public void doubleOnSubscribe() {
+        TestHelper.checkDoubleOnSubscribeFlowable(new Function<Flowable<Object>, Flowable<Object>>() {
+            @Override
+            public Flowable<Object> apply(Flowable<Object> f)
+                    throws Exception {
+                return f.ignoreElements().toFlowable();
+            }
+        });
+
+        TestHelper.checkDoubleOnSubscribeFlowableToCompletable(new Function<Flowable<Object>, Completable>() {
+            @Override
+            public Completable apply(Flowable<Object> f)
+                    throws Exception {
+                return f.ignoreElements();
+            }
+        });
     }
 }

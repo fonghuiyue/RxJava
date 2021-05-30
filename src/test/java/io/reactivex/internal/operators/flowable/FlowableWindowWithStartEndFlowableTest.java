@@ -17,15 +17,17 @@ import static org.junit.Assert.*;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.*;
 import org.reactivestreams.*;
 
 import io.reactivex.*;
-import io.reactivex.exceptions.TestException;
+import io.reactivex.exceptions.*;
 import io.reactivex.functions.*;
 import io.reactivex.internal.functions.Functions;
 import io.reactivex.internal.subscriptions.BooleanSubscription;
+import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.processors.*;
 import io.reactivex.schedulers.TestScheduler;
 import io.reactivex.subscribers.*;
@@ -48,24 +50,24 @@ public class FlowableWindowWithStartEndFlowableTest {
 
         Flowable<String> source = Flowable.unsafeCreate(new Publisher<String>() {
             @Override
-            public void subscribe(Subscriber<? super String> observer) {
-                observer.onSubscribe(new BooleanSubscription());
-                push(observer, "one", 10);
-                push(observer, "two", 60);
-                push(observer, "three", 110);
-                push(observer, "four", 160);
-                push(observer, "five", 210);
-                complete(observer, 500);
+            public void subscribe(Subscriber<? super String> subscriber) {
+                subscriber.onSubscribe(new BooleanSubscription());
+                push(subscriber, "one", 10);
+                push(subscriber, "two", 60);
+                push(subscriber, "three", 110);
+                push(subscriber, "four", 160);
+                push(subscriber, "five", 210);
+                complete(subscriber, 500);
             }
         });
 
         Flowable<Object> openings = Flowable.unsafeCreate(new Publisher<Object>() {
             @Override
-            public void subscribe(Subscriber<? super Object> observer) {
-                observer.onSubscribe(new BooleanSubscription());
-                push(observer, new Object(), 50);
-                push(observer, new Object(), 200);
-                complete(observer, 250);
+            public void subscribe(Subscriber<? super Object> subscriber) {
+                subscriber.onSubscribe(new BooleanSubscription());
+                push(subscriber, new Object(), 50);
+                push(subscriber, new Object(), 200);
+                complete(subscriber, 250);
             }
         });
 
@@ -74,10 +76,10 @@ public class FlowableWindowWithStartEndFlowableTest {
             public Flowable<Object> apply(Object opening) {
                 return Flowable.unsafeCreate(new Publisher<Object>() {
                     @Override
-                    public void subscribe(Subscriber<? super Object> observer) {
-                        observer.onSubscribe(new BooleanSubscription());
-                        push(observer, new Object(), 100);
-                        complete(observer, 101);
+                    public void subscribe(Subscriber<? super Object> subscriber) {
+                        subscriber.onSubscribe(new BooleanSubscription());
+                        push(subscriber, new Object(), 100);
+                        complete(subscriber, 101);
                     }
                 });
             }
@@ -99,14 +101,14 @@ public class FlowableWindowWithStartEndFlowableTest {
 
         Flowable<String> source = Flowable.unsafeCreate(new Publisher<String>() {
             @Override
-            public void subscribe(Subscriber<? super String> observer) {
-                observer.onSubscribe(new BooleanSubscription());
-                push(observer, "one", 10);
-                push(observer, "two", 60);
-                push(observer, "three", 110);
-                push(observer, "four", 160);
-                push(observer, "five", 210);
-                complete(observer, 250);
+            public void subscribe(Subscriber<? super String> subscriber) {
+                subscriber.onSubscribe(new BooleanSubscription());
+                push(subscriber, "one", 10);
+                push(subscriber, "two", 60);
+                push(subscriber, "three", 110);
+                push(subscriber, "four", 160);
+                push(subscriber, "five", 210);
+                complete(subscriber, 250);
             }
         });
 
@@ -116,16 +118,16 @@ public class FlowableWindowWithStartEndFlowableTest {
             public Flowable<Object> call() {
                 return Flowable.unsafeCreate(new Publisher<Object>() {
                     @Override
-                    public void subscribe(Subscriber<? super Object> observer) {
-                        observer.onSubscribe(new BooleanSubscription());
+                    public void subscribe(Subscriber<? super Object> subscriber) {
+                        subscriber.onSubscribe(new BooleanSubscription());
                         int c = calls++;
                         if (c == 0) {
-                            push(observer, new Object(), 100);
+                            push(subscriber, new Object(), 100);
                         } else
                         if (c == 1) {
-                            push(observer, new Object(), 100);
+                            push(subscriber, new Object(), 100);
                         } else {
-                            complete(observer, 101);
+                            complete(subscriber, 101);
                         }
                     }
                 });
@@ -150,20 +152,20 @@ public class FlowableWindowWithStartEndFlowableTest {
         return list;
     }
 
-    private <T> void push(final Subscriber<T> observer, final T value, int delay) {
+    private <T> void push(final Subscriber<T> subscriber, final T value, int delay) {
         innerScheduler.schedule(new Runnable() {
             @Override
             public void run() {
-                observer.onNext(value);
+                subscriber.onNext(value);
             }
         }, delay, TimeUnit.MILLISECONDS);
     }
 
-    private void complete(final Subscriber<?> observer, int delay) {
+    private void complete(final Subscriber<?> subscriber, int delay) {
         innerScheduler.schedule(new Runnable() {
             @Override
             public void run() {
-                observer.onComplete();
+                subscriber.onComplete();
             }
         }, delay, TimeUnit.MILLISECONDS);
     }
@@ -253,8 +255,8 @@ public class FlowableWindowWithStartEndFlowableTest {
 
         ts.dispose();
 
-        // FIXME subject has subscribers because of the open window
-        assertTrue(open.hasSubscribers());
+        // Disposing the outer sequence stops the opening of new windows
+        assertFalse(open.hasSubscribers());
         // FIXME subject has subscribers because of the open window
         assertTrue(close.hasSubscribers());
     }
@@ -268,7 +270,7 @@ public class FlowableWindowWithStartEndFlowableTest {
     public void reentrant() {
         final FlowableProcessor<Integer> ps = PublishProcessor.<Integer>create();
 
-        TestSubscriber<Integer> to = new TestSubscriber<Integer>() {
+        TestSubscriber<Integer> ts = new TestSubscriber<Integer>() {
             @Override
             public void onNext(Integer t) {
                 super.onNext(t);
@@ -286,11 +288,11 @@ public class FlowableWindowWithStartEndFlowableTest {
                 return v;
             }
         })
-        .subscribe(to);
+        .subscribe(ts);
 
         ps.onNext(1);
 
-        to
+        ts
         .awaitDone(1, TimeUnit.SECONDS)
         .assertResult(1, 2);
     }
@@ -299,8 +301,8 @@ public class FlowableWindowWithStartEndFlowableTest {
     public void badSourceCallable() {
         TestHelper.checkBadSourceFlowable(new Function<Flowable<Object>, Object>() {
             @Override
-            public Object apply(Flowable<Object> o) throws Exception {
-                return o.window(Flowable.just(1), Functions.justFunction(Flowable.never()));
+            public Object apply(Flowable<Object> f) throws Exception {
+                return f.window(Flowable.just(1), Functions.justFunction(Flowable.never()));
             }
         }, false, 1, 1, (Object[])null);
     }
@@ -311,7 +313,7 @@ public class FlowableWindowWithStartEndFlowableTest {
         PublishProcessor<Integer> start = PublishProcessor.create();
         final PublishProcessor<Integer> end = PublishProcessor.create();
 
-        TestSubscriber<Integer> to = source.window(start, new Function<Integer, Flowable<Integer>>() {
+        TestSubscriber<Integer> ts = source.window(start, new Function<Integer, Flowable<Integer>>() {
             @Override
             public Flowable<Integer> apply(Integer v) throws Exception {
                 return end;
@@ -338,7 +340,7 @@ public class FlowableWindowWithStartEndFlowableTest {
 
         TestHelper.emit(source, 7, 8);
 
-        to.assertResult(1, 2, 3, 4, 5, 5, 6, 6, 7, 8);
+        ts.assertResult(1, 2, 3, 4, 5, 5, 6, 6, 7, 8);
     }
 
     @Test
@@ -347,7 +349,7 @@ public class FlowableWindowWithStartEndFlowableTest {
         PublishProcessor<Integer> start = PublishProcessor.create();
         final PublishProcessor<Integer> end = PublishProcessor.create();
 
-        TestSubscriber<Integer> to = source.window(start, new Function<Integer, Flowable<Integer>>() {
+        TestSubscriber<Integer> ts = source.window(start, new Function<Integer, Flowable<Integer>>() {
             @Override
             public Flowable<Integer> apply(Integer v) throws Exception {
                 return end;
@@ -358,7 +360,7 @@ public class FlowableWindowWithStartEndFlowableTest {
 
         start.onError(new TestException());
 
-        to.assertFailure(TestException.class);
+        ts.assertFailure(TestException.class);
 
         assertFalse("Source has observers!", source.hasSubscribers());
         assertFalse("Start has observers!", start.hasSubscribers());
@@ -371,7 +373,7 @@ public class FlowableWindowWithStartEndFlowableTest {
         PublishProcessor<Integer> start = PublishProcessor.create();
         final PublishProcessor<Integer> end = PublishProcessor.create();
 
-        TestSubscriber<Integer> to = source.window(start, new Function<Integer, Flowable<Integer>>() {
+        TestSubscriber<Integer> ts = source.window(start, new Function<Integer, Flowable<Integer>>() {
             @Override
             public Flowable<Integer> apply(Integer v) throws Exception {
                 return end;
@@ -383,7 +385,7 @@ public class FlowableWindowWithStartEndFlowableTest {
         start.onNext(1);
         end.onError(new TestException());
 
-        to.assertFailure(TestException.class);
+        ts.assertFailure(TestException.class);
 
         assertFalse("Source has observers!", source.hasSubscribers());
         assertFalse("Start has observers!", start.hasSubscribers());
@@ -397,5 +399,90 @@ public class FlowableWindowWithStartEndFlowableTest {
         .flatMap(Functions.<Flowable<Integer>>identity())
         .test()
         .assertFailure(TestException.class);
+    }
+
+    @Test
+    public void windowCloseIngoresCancel() {
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            BehaviorProcessor.createDefault(1)
+            .window(BehaviorProcessor.createDefault(1), new Function<Integer, Publisher<Integer>>() {
+                @Override
+                public Publisher<Integer> apply(Integer f) throws Exception {
+                    return new Flowable<Integer>() {
+                        @Override
+                        protected void subscribeActual(
+                                Subscriber<? super Integer> s) {
+                            s.onSubscribe(new BooleanSubscription());
+                            s.onNext(1);
+                            s.onNext(2);
+                            s.onError(new TestException());
+                        }
+                    };
+                }
+            })
+            .test()
+            .assertValueCount(1)
+            .assertNoErrors()
+            .assertNotComplete();
+
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
+        } finally {
+            RxJavaPlugins.reset();
+        }
+    }
+
+    static Flowable<Integer> flowableDisposed(final AtomicBoolean ref) {
+        return Flowable.just(1).concatWith(Flowable.<Integer>never())
+                .doOnCancel(new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        ref.set(true);
+                    }
+                });
+    }
+
+    @Test
+    public void mainAndBoundaryDisposeOnNoWindows() {
+        AtomicBoolean mainDisposed = new AtomicBoolean();
+        AtomicBoolean openDisposed = new AtomicBoolean();
+        final AtomicBoolean closeDisposed = new AtomicBoolean();
+
+        flowableDisposed(mainDisposed)
+        .window(flowableDisposed(openDisposed), new Function<Integer, Flowable<Integer>>() {
+            @Override
+            public Flowable<Integer> apply(Integer v) throws Exception {
+                return flowableDisposed(closeDisposed);
+            }
+        })
+        .test()
+        .assertSubscribed()
+        .assertNoErrors()
+        .assertNotComplete()
+        .dispose();
+
+        assertTrue(mainDisposed.get());
+        assertTrue(openDisposed.get());
+        assertTrue(closeDisposed.get());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void mainWindowMissingBackpressure() {
+        PublishProcessor<Integer> source = PublishProcessor.create();
+        PublishProcessor<Integer> boundary = PublishProcessor.create();
+
+        TestSubscriber<Flowable<Integer>> ts = source.window(boundary, Functions.justFunction(Flowable.never()))
+        .test(0L)
+        ;
+
+        ts.assertEmpty();
+
+        boundary.onNext(1);
+
+        ts.assertFailure(MissingBackpressureException.class);
+
+        assertFalse(source.hasSubscribers());
+        assertFalse(boundary.hasSubscribers());
     }
 }

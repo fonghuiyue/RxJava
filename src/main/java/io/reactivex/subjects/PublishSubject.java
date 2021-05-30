@@ -14,20 +14,68 @@
 package io.reactivex.subjects;
 
 import io.reactivex.annotations.CheckReturnValue;
+import io.reactivex.annotations.Nullable;
+import io.reactivex.annotations.NonNull;
 import java.util.concurrent.atomic.*;
 
 import io.reactivex.Observer;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.internal.functions.ObjectHelper;
 import io.reactivex.plugins.RxJavaPlugins;
 
 /**
- * Subject that, once an {@link Observer} has subscribed, emits all subsequently observed items to the
- * subscriber.
+ * A Subject that emits (multicasts) items to currently subscribed {@link Observer}s and terminal events to current
+ * or late {@code Observer}s.
  * <p>
- * <img width="640" height="405" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/S.PublishSubject.png" alt="">
+ * <img width="640" height="281" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/PublishSubject.png" alt="">
+ * <p>
+ * This subject does not have a public constructor by design; a new empty instance of this
+ * {@code PublishSubject} can be created via the {@link #create()} method.
+ * <p>
+ * Since a {@code Subject} is conceptionally derived from the {@code Processor} type in the Reactive Streams specification,
+ * {@code null}s are not allowed (<a href="https://github.com/reactive-streams/reactive-streams-jvm#2.13">Rule 2.13</a>) as
+ * parameters to {@link #onNext(Object)} and {@link #onError(Throwable)}. Such calls will result in a
+ * {@link NullPointerException} being thrown and the subject's state is not changed.
+ * <p>
+ * Since a {@code PublishSubject} is an {@link io.reactivex.Observable}, it does not support backpressure.
+ * <p>
+ * When this {@code PublishSubject} is terminated via {@link #onError(Throwable)} or {@link #onComplete()},
+ * late {@link io.reactivex.Observer}s only receive the respective terminal event.
+ * <p>
+ * Unlike a {@link BehaviorSubject}, a {@code PublishSubject} doesn't retain/cache items, therefore, a new
+ * {@code Observer} won't receive any past items.
+ * <p>
+ * Even though {@code PublishSubject} implements the {@code Observer} interface, calling
+ * {@code onSubscribe} is not required (<a href="https://github.com/reactive-streams/reactive-streams-jvm#2.12">Rule 2.12</a>)
+ * if the subject is used as a standalone source. However, calling {@code onSubscribe}
+ * after the {@code PublishSubject} reached its terminal state will result in the
+ * given {@code Disposable} being disposed immediately.
+ * <p>
+ * Calling {@link #onNext(Object)}, {@link #onError(Throwable)} and {@link #onComplete()}
+ * is required to be serialized (called from the same thread or called non-overlappingly from different threads
+ * through external means of serialization). The {@link #toSerialized()} method available to all {@code Subject}s
+ * provides such serialization and also protects against reentrance (i.e., when a downstream {@code Observer}
+ * consuming this subject also wants to call {@link #onNext(Object)} on this subject recursively).
+ * <p>
+ * This {@code PublishSubject} supports the standard state-peeking methods {@link #hasComplete()}, {@link #hasThrowable()},
+ * {@link #getThrowable()} and {@link #hasObservers()}.
+ * <dl>
+ *  <dt><b>Scheduler:</b></dt>
+ *  <dd>{@code PublishSubject} does not operate by default on a particular {@link io.reactivex.Scheduler} and
+ *  the {@code Observer}s get notified on the thread the respective {@code onXXX} methods were invoked.</dd>
+ *  <dt><b>Error handling:</b></dt>
+ *  <dd>When the {@link #onError(Throwable)} is called, the {@code PublishSubject} enters into a terminal state
+ *  and emits the same {@code Throwable} instance to the last set of {@code Observer}s. During this emission,
+ *  if one or more {@code Observer}s dispose their respective {@code Disposable}s, the
+ *  {@code Throwable} is delivered to the global error handler via
+ *  {@link io.reactivex.plugins.RxJavaPlugins#onError(Throwable)} (multiple times if multiple {@code Observer}s
+ *  cancel at once).
+ *  If there were no {@code Observer}s subscribed to this {@code PublishSubject} when the {@code onError()}
+ *  was called, the global error handler is not invoked.
+ *  </dd>
+ * </dl>
  * <p>
  * Example usage:
- * <p>
  * <pre> {@code
 
   PublishSubject<Object> subject = PublishSubject.create();
@@ -40,6 +88,8 @@ import io.reactivex.plugins.RxJavaPlugins;
   subject.onNext("three");
   subject.onComplete();
 
+  // late Observers only receive the terminal event
+  subject.test().assertEmpty();
   } </pre>
  *
  * @param <T>
@@ -65,6 +115,7 @@ public final class PublishSubject<T> extends Subject<T> {
      * @return the new PublishSubject
      */
     @CheckReturnValue
+    @NonNull
     public static <T> PublishSubject<T> create() {
         return new PublishSubject<T>();
     }
@@ -78,9 +129,8 @@ public final class PublishSubject<T> extends Subject<T> {
         subscribers = new AtomicReference<PublishDisposable<T>[]>(EMPTY);
     }
 
-
     @Override
-    public void subscribeActual(Observer<? super T> t) {
+    protected void subscribeActual(Observer<? super T> t) {
         PublishDisposable<T> ps = new PublishDisposable<T>(t, this);
         t.onSubscribe(ps);
         if (add(ps)) {
@@ -165,40 +215,32 @@ public final class PublishSubject<T> extends Subject<T> {
     }
 
     @Override
-    public void onSubscribe(Disposable s) {
+    public void onSubscribe(Disposable d) {
         if (subscribers.get() == TERMINATED) {
-            s.dispose();
+            d.dispose();
         }
     }
 
     @Override
     public void onNext(T t) {
-        if (subscribers.get() == TERMINATED) {
-            return;
-        }
-        if (t == null) {
-            onError(new NullPointerException("onNext called with null. Null values are generally not allowed in 2.x operators and sources."));
-            return;
-        }
-        for (PublishDisposable<T> s : subscribers.get()) {
-            s.onNext(t);
+        ObjectHelper.requireNonNull(t, "onNext called with null. Null values are generally not allowed in 2.x operators and sources.");
+        for (PublishDisposable<T> pd : subscribers.get()) {
+            pd.onNext(t);
         }
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public void onError(Throwable t) {
+        ObjectHelper.requireNonNull(t, "onError called with null. Null values are generally not allowed in 2.x operators and sources.");
         if (subscribers.get() == TERMINATED) {
             RxJavaPlugins.onError(t);
             return;
         }
-        if (t == null) {
-            t = new NullPointerException("onError called with null. Null values are generally not allowed in 2.x operators and sources.");
-        }
         error = t;
 
-        for (PublishDisposable<T> s : subscribers.getAndSet(TERMINATED)) {
-            s.onError(t);
+        for (PublishDisposable<T> pd : subscribers.getAndSet(TERMINATED)) {
+            pd.onError(t);
         }
     }
 
@@ -208,8 +250,8 @@ public final class PublishSubject<T> extends Subject<T> {
         if (subscribers.get() == TERMINATED) {
             return;
         }
-        for (PublishDisposable<T> s : subscribers.getAndSet(TERMINATED)) {
-            s.onComplete();
+        for (PublishDisposable<T> pd : subscribers.getAndSet(TERMINATED)) {
+            pd.onComplete();
         }
     }
 
@@ -219,6 +261,7 @@ public final class PublishSubject<T> extends Subject<T> {
     }
 
     @Override
+    @Nullable
     public Throwable getThrowable() {
         if (subscribers.get() == TERMINATED) {
             return error;
@@ -246,7 +289,7 @@ public final class PublishSubject<T> extends Subject<T> {
 
         private static final long serialVersionUID = 3562861878281475070L;
         /** The actual subscriber. */
-        final Observer<? super T> actual;
+        final Observer<? super T> downstream;
         /** The subject state. */
         final PublishSubject<T> parent;
 
@@ -256,13 +299,13 @@ public final class PublishSubject<T> extends Subject<T> {
          * @param parent the parent PublishProcessor
          */
         PublishDisposable(Observer<? super T> actual, PublishSubject<T> parent) {
-            this.actual = actual;
+            this.downstream = actual;
             this.parent = parent;
         }
 
         public void onNext(T t) {
             if (!get()) {
-                actual.onNext(t);
+                downstream.onNext(t);
             }
         }
 
@@ -270,13 +313,13 @@ public final class PublishSubject<T> extends Subject<T> {
             if (get()) {
                 RxJavaPlugins.onError(t);
             } else {
-                actual.onError(t);
+                downstream.onError(t);
             }
         }
 
         public void onComplete() {
             if (!get()) {
-                actual.onComplete();
+                downstream.onComplete();
             }
         }
 

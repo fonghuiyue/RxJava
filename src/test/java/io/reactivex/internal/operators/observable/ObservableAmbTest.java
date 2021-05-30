@@ -18,8 +18,8 @@ import static org.mockito.Mockito.*;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
 
 import org.junit.*;
 import org.mockito.InOrder;
@@ -29,7 +29,8 @@ import io.reactivex.Observable;
 import io.reactivex.Observer;
 import io.reactivex.disposables.*;
 import io.reactivex.exceptions.TestException;
-import io.reactivex.functions.Consumer;
+import io.reactivex.functions.*;
+import io.reactivex.internal.functions.Functions;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.schedulers.*;
@@ -165,7 +166,7 @@ public class ObservableAmbTest {
         final AtomicLong count = new AtomicLong();
         Consumer<Disposable> incrementer = new Consumer<Disposable>() {
             @Override
-            public void accept(Disposable s) {
+            public void accept(Disposable d) {
                 count.incrementAndGet();
             }
         };
@@ -176,10 +177,10 @@ public class ObservableAmbTest {
         //this stream emits second
         Observable<Integer> o2 = Observable.just(1).doOnSubscribe(incrementer)
                 .delay(100, TimeUnit.MILLISECONDS).subscribeOn(Schedulers.computation());
-        TestObserver<Integer> ts = new TestObserver<Integer>();
-        Observable.ambArray(o1, o2).subscribe(ts);
-        ts.awaitTerminalEvent(5, TimeUnit.SECONDS);
-        ts.assertNoErrors();
+        TestObserver<Integer> to = new TestObserver<Integer>();
+        Observable.ambArray(o1, o2).subscribe(to);
+        to.awaitTerminalEvent(5, TimeUnit.SECONDS);
+        to.assertNoErrors();
         assertEquals(2, count.get());
     }
 
@@ -210,9 +211,9 @@ public class ObservableAmbTest {
         PublishSubject<Integer> source2 = PublishSubject.create();
         PublishSubject<Integer> source3 = PublishSubject.create();
 
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        Observable.ambArray(source1, source2, source3).subscribe(ts);
+        Observable.ambArray(source1, source2, source3).subscribe(to);
 
         assertTrue("Source 1 doesn't have subscribers!", source1.hasObservers());
         assertTrue("Source 2 doesn't have subscribers!", source2.hasObservers());
@@ -263,6 +264,23 @@ public class ObservableAmbTest {
         .assertResult(1);
     }
 
+    /**
+     * Ensures that an ObservableSource implementation can be supplied that doesn't subclass Observable
+     */
+    @Test
+    public void singleIterableNotSubclassingObservable() {
+        final ObservableSource<Integer> s1 = new ObservableSource<Integer>() {
+            @Override
+            public void subscribe (final Observer<? super Integer> observer) {
+                Observable.just(1).subscribe(observer);
+            }
+        };
+
+        Observable.amb(Collections.singletonList(s1))
+        .test()
+        .assertResult(1);
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void disposed() {
@@ -271,7 +289,7 @@ public class ObservableAmbTest {
 
     @Test
     public void onNextRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps1 = PublishSubject.create();
             final PublishSubject<Integer> ps2 = PublishSubject.create();
 
@@ -291,7 +309,7 @@ public class ObservableAmbTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             to.assertSubscribed().assertNoErrors()
             .assertNotComplete().assertValueCount(1);
@@ -300,7 +318,7 @@ public class ObservableAmbTest {
 
     @Test
     public void onCompleteRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps1 = PublishSubject.create();
             final PublishSubject<Integer> ps2 = PublishSubject.create();
 
@@ -320,7 +338,7 @@ public class ObservableAmbTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             to.assertResult();
         }
@@ -328,7 +346,7 @@ public class ObservableAmbTest {
 
     @Test
     public void onErrorRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishSubject<Integer> ps1 = PublishSubject.create();
             final PublishSubject<Integer> ps2 = PublishSubject.create();
 
@@ -352,7 +370,7 @@ public class ObservableAmbTest {
 
             List<Throwable> errors = TestHelper.trackPluginErrors();
             try {
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
             } finally {
                 RxJavaPlugins.reset();
             }
@@ -383,4 +401,84 @@ public class ObservableAmbTest {
         Observable<Integer> error = Observable.error(new RuntimeException());
         Observable.ambArray(Observable.just(1), error).test().assertValue(1).assertComplete();
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void noWinnerSuccessDispose() throws Exception {
+        for (int i = 0; i < TestHelper.RACE_LONG_LOOPS; i++) {
+            final AtomicBoolean interrupted = new AtomicBoolean();
+            final CountDownLatch cdl = new CountDownLatch(1);
+
+            Observable.ambArray(
+                Observable.just(1)
+                    .subscribeOn(Schedulers.single())
+                    .observeOn(Schedulers.computation()),
+                Observable.never()
+            )
+            .subscribe(new Consumer<Object>() {
+                @Override
+                public void accept(Object v) throws Exception {
+                    interrupted.set(Thread.currentThread().isInterrupted());
+                    cdl.countDown();
+                }
+            });
+
+            assertTrue(cdl.await(500, TimeUnit.SECONDS));
+            assertFalse("Interrupted!", interrupted.get());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void noWinnerErrorDispose() throws Exception {
+        final TestException ex = new TestException();
+        for (int i = 0; i < TestHelper.RACE_LONG_LOOPS; i++) {
+            final AtomicBoolean interrupted = new AtomicBoolean();
+            final CountDownLatch cdl = new CountDownLatch(1);
+
+            Observable.ambArray(
+                Observable.error(ex)
+                    .subscribeOn(Schedulers.single())
+                    .observeOn(Schedulers.computation()),
+                Observable.never()
+            )
+            .subscribe(Functions.emptyConsumer(), new Consumer<Throwable>() {
+                @Override
+                public void accept(Throwable e) throws Exception {
+                    interrupted.set(Thread.currentThread().isInterrupted());
+                    cdl.countDown();
+                }
+            });
+
+            assertTrue(cdl.await(500, TimeUnit.SECONDS));
+            assertFalse("Interrupted!", interrupted.get());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void noWinnerCompleteDispose() throws Exception {
+        for (int i = 0; i < TestHelper.RACE_LONG_LOOPS; i++) {
+            final AtomicBoolean interrupted = new AtomicBoolean();
+            final CountDownLatch cdl = new CountDownLatch(1);
+
+            Observable.ambArray(
+                Observable.empty()
+                    .subscribeOn(Schedulers.single())
+                    .observeOn(Schedulers.computation()),
+                Observable.never()
+            )
+            .subscribe(Functions.emptyConsumer(), Functions.emptyConsumer(), new Action() {
+                @Override
+                public void run() throws Exception {
+                    interrupted.set(Thread.currentThread().isInterrupted());
+                    cdl.countDown();
+                }
+            });
+
+            assertTrue(cdl.await(500, TimeUnit.SECONDS));
+            assertFalse("Interrupted!", interrupted.get());
+        }
+    }
+
 }

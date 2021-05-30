@@ -23,23 +23,23 @@ import io.reactivex.Observable;
 import io.reactivex.TestHelper;
 import io.reactivex.disposables.*;
 import io.reactivex.exceptions.TestException;
-import io.reactivex.observers.TestObserver;
+import io.reactivex.observers.*;
 import io.reactivex.plugins.RxJavaPlugins;
-import io.reactivex.schedulers.Schedulers;
 
 public class SerializedSubjectTest {
 
     @Test
     public void testBasic() {
         SerializedSubject<String> subject = new SerializedSubject<String>(PublishSubject.<String> create());
-        TestObserver<String> ts = new TestObserver<String>();
-        subject.subscribe(ts);
+        TestObserver<String> to = new TestObserver<String>();
+        subject.subscribe(to);
         subject.onNext("hello");
         subject.onComplete();
-        ts.awaitTerminalEvent();
-        ts.assertValue("hello");
+        to.awaitTerminalEvent();
+        to.assertValue("hello");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testAsyncSubjectValueRelay() {
         AsyncSubject<Integer> async = AsyncSubject.create();
@@ -58,6 +58,8 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { 1 }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { 1, null }, async.getValues(new Integer[] { 0, 0 }));
     }
+
+    @SuppressWarnings("deprecation")
     @Test
     public void testAsyncSubjectValueEmpty() {
         AsyncSubject<Integer> async = AsyncSubject.create();
@@ -75,6 +77,8 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { null }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { null, 0 }, async.getValues(new Integer[] { 0, 0 }));
     }
+
+    @SuppressWarnings("deprecation")
     @Test
     public void testAsyncSubjectValueError() {
         AsyncSubject<Integer> async = AsyncSubject.create();
@@ -93,6 +97,7 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { null }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { null, 0 }, async.getValues(new Integer[] { 0, 0 }));
     }
+
     @Test
     public void testPublishSubjectValueRelay() {
         PublishSubject<Integer> async = PublishSubject.create();
@@ -117,6 +122,7 @@ public class SerializedSubjectTest {
         assertFalse(serial.hasThrowable());
         assertNull(serial.getThrowable());
     }
+
     @Test
     public void testPublishSubjectValueError() {
         PublishSubject<Integer> async = PublishSubject.create();
@@ -130,6 +136,7 @@ public class SerializedSubjectTest {
         assertSame(te, serial.getThrowable());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testBehaviorSubjectValueRelay() {
         BehaviorSubject<Integer> async = BehaviorSubject.create();
@@ -148,6 +155,8 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { null }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { null, 0 }, async.getValues(new Integer[] { 0, 0 }));
     }
+
+    @SuppressWarnings("deprecation")
     @Test
     public void testBehaviorSubjectValueRelayIncomplete() {
         BehaviorSubject<Integer> async = BehaviorSubject.create();
@@ -165,6 +174,8 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { 1 }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { 1, null }, async.getValues(new Integer[] { 0, 0 }));
     }
+
+    @SuppressWarnings("deprecation")
     @Test
     public void testBehaviorSubjectIncompleteEmpty() {
         BehaviorSubject<Integer> async = BehaviorSubject.create();
@@ -181,6 +192,8 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { null }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { null, 0 }, async.getValues(new Integer[] { 0, 0 }));
     }
+
+    @SuppressWarnings("deprecation")
     @Test
     public void testBehaviorSubjectEmpty() {
         BehaviorSubject<Integer> async = BehaviorSubject.create();
@@ -198,6 +211,8 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { null }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { null, 0 }, async.getValues(new Integer[] { 0, 0 }));
     }
+
+    @SuppressWarnings("deprecation")
     @Test
     public void testBehaviorSubjectError() {
         BehaviorSubject<Integer> async = BehaviorSubject.create();
@@ -235,6 +250,7 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { 1 }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { 1, null }, async.getValues(new Integer[] { 0, 0 }));
     }
+
     @Test
     public void testReplaySubjectValueRelayIncomplete() {
         ReplaySubject<Integer> async = ReplaySubject.create();
@@ -252,6 +268,7 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { 1 }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { 1, null }, async.getValues(new Integer[] { 0, 0 }));
     }
+
     @Test
     public void testReplaySubjectValueRelayBounded() {
         ReplaySubject<Integer> async = ReplaySubject.createWithSize(1);
@@ -271,6 +288,7 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { 1 }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { 1, null }, async.getValues(new Integer[] { 0, 0 }));
     }
+
     @Test
     public void testReplaySubjectValueRelayBoundedIncomplete() {
         ReplaySubject<Integer> async = ReplaySubject.createWithSize(1);
@@ -289,6 +307,7 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { 1 }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { 1, null }, async.getValues(new Integer[] { 0, 0 }));
     }
+
     @Test
     public void testReplaySubjectValueRelayBoundedEmptyIncomplete() {
         ReplaySubject<Integer> async = ReplaySubject.createWithSize(1);
@@ -305,6 +324,7 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { null }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { null, 0 }, async.getValues(new Integer[] { 0, 0 }));
     }
+
     @Test
     public void testReplaySubjectValueRelayEmptyIncomplete() {
         ReplaySubject<Integer> async = ReplaySubject.create();
@@ -339,6 +359,7 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { null }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { null, 0 }, async.getValues(new Integer[] { 0, 0 }));
     }
+
     @Test
     public void testReplaySubjectError() {
         ReplaySubject<Integer> async = ReplaySubject.create();
@@ -375,6 +396,7 @@ public class SerializedSubjectTest {
         assertArrayEquals(new Integer[] { null }, async.getValues(new Integer[] { 0 }));
         assertArrayEquals(new Integer[] { null, 0 }, async.getValues(new Integer[] { 0, 0 }));
     }
+
     @Test
     public void testReplaySubjectBoundedError() {
         ReplaySubject<Integer> async = ReplaySubject.createWithSize(1);
@@ -406,11 +428,11 @@ public class SerializedSubjectTest {
     public void normal() {
         Subject<Integer> s = PublishSubject.<Integer>create().toSerialized();
 
-        TestObserver<Integer> ts = s.test();
+        TestObserver<Integer> to = s.test();
 
         Observable.range(1, 10).subscribe(s);
 
-        ts.assertResult(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        to.assertResult(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
 
         assertFalse(s.hasObservers());
 
@@ -433,10 +455,10 @@ public class SerializedSubjectTest {
 
     @Test
     public void onNextOnNextRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final Subject<Integer> s = PublishSubject.<Integer>create().toSerialized();
 
-            TestObserver<Integer> ts = s.test();
+            TestObserver<Integer> to = s.test();
 
             Runnable r1 = new Runnable() {
                 @Override
@@ -452,19 +474,19 @@ public class SerializedSubjectTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
-            ts.assertSubscribed().assertNoErrors().assertNotComplete()
+            to.assertSubscribed().assertNoErrors().assertNotComplete()
             .assertValueSet(Arrays.asList(1, 2));
         }
     }
 
     @Test
     public void onNextOnErrorRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final Subject<Integer> s = PublishSubject.<Integer>create().toSerialized();
 
-            TestObserver<Integer> ts = s.test();
+            TestObserver<Integer> to = s.test();
 
             final TestException ex = new TestException();
 
@@ -482,22 +504,22 @@ public class SerializedSubjectTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
-            ts.assertError(ex).assertNotComplete();
+            to.assertError(ex).assertNotComplete();
 
-            if (ts.valueCount() != 0) {
-                ts.assertValue(1);
+            if (to.valueCount() != 0) {
+                to.assertValue(1);
             }
         }
     }
 
     @Test
     public void onNextOnCompleteRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final Subject<Integer> s = PublishSubject.<Integer>create().toSerialized();
 
-            TestObserver<Integer> ts = s.test();
+            TestObserver<Integer> to = s.test();
 
             Runnable r1 = new Runnable() {
                 @Override
@@ -513,22 +535,22 @@ public class SerializedSubjectTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
-            ts.assertComplete().assertNoErrors();
+            to.assertComplete().assertNoErrors();
 
-            if (ts.valueCount() != 0) {
-                ts.assertValue(1);
+            if (to.valueCount() != 0) {
+                to.assertValue(1);
             }
         }
     }
 
     @Test
     public void onNextOnSubscribeRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final Subject<Integer> s = PublishSubject.<Integer>create().toSerialized();
 
-            TestObserver<Integer> ts = s.test();
+            TestObserver<Integer> to = s.test();
 
             final Disposable bs = Disposables.empty();
 
@@ -546,18 +568,18 @@ public class SerializedSubjectTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
-            ts.assertValue(1).assertNotComplete().assertNoErrors();
+            to.assertValue(1).assertNotComplete().assertNoErrors();
         }
     }
 
     @Test
     public void onCompleteOnSubscribeRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final Subject<Integer> s = PublishSubject.<Integer>create().toSerialized();
 
-            TestObserver<Integer> ts = s.test();
+            TestObserver<Integer> to = s.test();
 
             final Disposable bs = Disposables.empty();
 
@@ -575,18 +597,18 @@ public class SerializedSubjectTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
-            ts.assertResult();
+            to.assertResult();
         }
     }
 
     @Test
     public void onCompleteOnCompleteRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final Subject<Integer> s = PublishSubject.<Integer>create().toSerialized();
 
-            TestObserver<Integer> ts = s.test();
+            TestObserver<Integer> to = s.test();
 
             Runnable r1 = new Runnable() {
                 @Override
@@ -602,18 +624,18 @@ public class SerializedSubjectTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
-            ts.assertResult();
+            to.assertResult();
         }
     }
 
     @Test
     public void onErrorOnErrorRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final Subject<Integer> s = PublishSubject.<Integer>create().toSerialized();
 
-            TestObserver<Integer> ts = s.test();
+            TestObserver<Integer> to = s.test();
 
             final TestException ex = new TestException();
 
@@ -633,9 +655,9 @@ public class SerializedSubjectTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
-                ts.assertFailure(TestException.class);
+                to.assertFailure(TestException.class);
 
                 TestHelper.assertUndeliverable(errors, 0, TestException.class);
             } finally {
@@ -646,10 +668,10 @@ public class SerializedSubjectTest {
 
     @Test
     public void onSubscribeOnSubscribeRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final Subject<Integer> s = PublishSubject.<Integer>create().toSerialized();
 
-            TestObserver<Integer> ts = s.test();
+            TestObserver<Integer> to = s.test();
 
             final Disposable bs1 = Disposables.empty();
             final Disposable bs2 = Disposables.empty();
@@ -668,9 +690,9 @@ public class SerializedSubjectTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
-            ts.assertEmpty();
+            to.assertEmpty();
         }
     }
 }

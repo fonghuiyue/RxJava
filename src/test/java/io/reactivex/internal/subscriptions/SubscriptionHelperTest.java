@@ -14,7 +14,7 @@
 package io.reactivex.internal.subscriptions;
 
 import static org.junit.Assert.*;
-
+import static org.mockito.Mockito.*;
 import java.util.List;
 import java.util.concurrent.atomic.*;
 
@@ -22,8 +22,8 @@ import org.junit.Test;
 import org.reactivestreams.Subscription;
 
 import io.reactivex.TestHelper;
+import io.reactivex.exceptions.ProtocolViolationException;
 import io.reactivex.plugins.RxJavaPlugins;
-import io.reactivex.schedulers.Schedulers;
 
 public class SubscriptionHelperTest {
 
@@ -51,15 +51,15 @@ public class SubscriptionHelperTest {
 
     @Test
     public void set() {
-        AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+        AtomicReference<Subscription> atomicSubscription = new AtomicReference<Subscription>();
 
         BooleanSubscription bs1 = new BooleanSubscription();
 
-        assertTrue(SubscriptionHelper.set(s, bs1));
+        assertTrue(SubscriptionHelper.set(atomicSubscription, bs1));
 
         BooleanSubscription bs2 = new BooleanSubscription();
 
-        assertTrue(SubscriptionHelper.set(s, bs2));
+        assertTrue(SubscriptionHelper.set(atomicSubscription, bs2));
 
         assertTrue(bs1.isCancelled());
 
@@ -68,15 +68,15 @@ public class SubscriptionHelperTest {
 
     @Test
     public void replace() {
-        AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+        AtomicReference<Subscription> atomicSubscription = new AtomicReference<Subscription>();
 
         BooleanSubscription bs1 = new BooleanSubscription();
 
-        assertTrue(SubscriptionHelper.replace(s, bs1));
+        assertTrue(SubscriptionHelper.replace(atomicSubscription, bs1));
 
         BooleanSubscription bs2 = new BooleanSubscription();
 
-        assertTrue(SubscriptionHelper.replace(s, bs2));
+        assertTrue(SubscriptionHelper.replace(atomicSubscription, bs2));
 
         assertFalse(bs1.isCancelled());
 
@@ -85,24 +85,24 @@ public class SubscriptionHelperTest {
 
     @Test
     public void cancelRace() {
-        for (int i = 0; i < 500; i++) {
-            final AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final AtomicReference<Subscription> atomicSubscription = new AtomicReference<Subscription>();
 
             Runnable r = new Runnable() {
                 @Override
                 public void run() {
-                    SubscriptionHelper.cancel(s);
+                    SubscriptionHelper.cancel(atomicSubscription);
                 }
             };
 
-            TestHelper.race(r, r, Schedulers.single());
+            TestHelper.race(r, r);
         }
     }
 
     @Test
     public void setRace() {
-        for (int i = 0; i < 500; i++) {
-            final AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final AtomicReference<Subscription> atomicSubscription = new AtomicReference<Subscription>();
 
             final BooleanSubscription bs1 = new BooleanSubscription();
             final BooleanSubscription bs2 = new BooleanSubscription();
@@ -110,18 +110,18 @@ public class SubscriptionHelperTest {
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    SubscriptionHelper.set(s, bs1);
+                    SubscriptionHelper.set(atomicSubscription, bs1);
                 }
             };
 
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    SubscriptionHelper.set(s, bs2);
+                    SubscriptionHelper.set(atomicSubscription, bs2);
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             assertTrue(bs1.isCancelled() ^ bs2.isCancelled());
         }
@@ -129,8 +129,8 @@ public class SubscriptionHelperTest {
 
     @Test
     public void replaceRace() {
-        for (int i = 0; i < 500; i++) {
-            final AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final AtomicReference<Subscription> atomicSubscription = new AtomicReference<Subscription>();
 
             final BooleanSubscription bs1 = new BooleanSubscription();
             final BooleanSubscription bs2 = new BooleanSubscription();
@@ -138,18 +138,18 @@ public class SubscriptionHelperTest {
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    SubscriptionHelper.replace(s, bs1);
+                    SubscriptionHelper.replace(atomicSubscription, bs1);
                 }
             };
 
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    SubscriptionHelper.replace(s, bs2);
+                    SubscriptionHelper.replace(atomicSubscription, bs2);
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             assertFalse(bs1.isCancelled());
             assertFalse(bs2.isCancelled());
@@ -158,31 +158,31 @@ public class SubscriptionHelperTest {
 
     @Test
     public void cancelAndChange() {
-        AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+        AtomicReference<Subscription> atomicSubscription = new AtomicReference<Subscription>();
 
-        SubscriptionHelper.cancel(s);
+        SubscriptionHelper.cancel(atomicSubscription);
 
         BooleanSubscription bs1 = new BooleanSubscription();
-        assertFalse(SubscriptionHelper.set(s, bs1));
+        assertFalse(SubscriptionHelper.set(atomicSubscription, bs1));
         assertTrue(bs1.isCancelled());
 
-        assertFalse(SubscriptionHelper.set(s, null));
+        assertFalse(SubscriptionHelper.set(atomicSubscription, null));
 
         BooleanSubscription bs2 = new BooleanSubscription();
-        assertFalse(SubscriptionHelper.replace(s, bs2));
+        assertFalse(SubscriptionHelper.replace(atomicSubscription, bs2));
         assertTrue(bs2.isCancelled());
 
-        assertFalse(SubscriptionHelper.replace(s, null));
+        assertFalse(SubscriptionHelper.replace(atomicSubscription, null));
     }
 
     @Test
     public void invalidDeferredRequest() {
-        AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+        AtomicReference<Subscription> atomicSubscription = new AtomicReference<Subscription>();
         AtomicLong r = new AtomicLong();
 
         List<Throwable> errors = TestHelper.trackPluginErrors();
         try {
-            SubscriptionHelper.deferredRequest(s, r, -99);
+            SubscriptionHelper.deferredRequest(atomicSubscription, r, -99);
 
             TestHelper.assertError(errors, 0, IllegalArgumentException.class, "n > 0 required but it was -99");
         } finally {
@@ -192,8 +192,8 @@ public class SubscriptionHelperTest {
 
     @Test
     public void deferredRace() {
-        for (int i = 0; i < 500; i++) {
-            final AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final AtomicReference<Subscription> atomicSubscription = new AtomicReference<Subscription>();
             final AtomicLong r = new AtomicLong();
 
             final AtomicLong q = new AtomicLong();
@@ -213,22 +213,48 @@ public class SubscriptionHelperTest {
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    SubscriptionHelper.deferredSetOnce(s, r, a);
+                    SubscriptionHelper.deferredSetOnce(atomicSubscription, r, a);
                 }
             };
 
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    SubscriptionHelper.deferredRequest(s, r, 1);
+                    SubscriptionHelper.deferredRequest(atomicSubscription, r, 1);
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
-            assertSame(a, s.get());
+            assertSame(a, atomicSubscription.get());
             assertEquals(1, q.get());
             assertEquals(0, r.get());
+        }
+    }
+
+    @Test
+    public void setOnceAndRequest() {
+        AtomicReference<Subscription> ref = new AtomicReference<Subscription>();
+
+        Subscription sub = mock(Subscription.class);
+
+        assertTrue(SubscriptionHelper.setOnce(ref, sub, 1));
+
+        verify(sub).request(1);
+        verify(sub, never()).cancel();
+
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            sub = mock(Subscription.class);
+
+            assertFalse(SubscriptionHelper.setOnce(ref, sub, 1));
+
+            verify(sub, never()).request(anyLong());
+            verify(sub).cancel();
+
+            TestHelper.assertError(errors, 0, ProtocolViolationException.class);
+        } finally {
+            RxJavaPlugins.reset();
         }
     }
 }

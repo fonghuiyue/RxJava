@@ -17,11 +17,8 @@ import java.util.concurrent.*;
 
 import io.reactivex.*;
 import io.reactivex.functions.*;
-import io.reactivex.internal.functions.Functions;
-import io.reactivex.internal.functions.ObjectHelper;
-import io.reactivex.internal.operators.single.SingleToObservable;
+import io.reactivex.internal.functions.*;
 import io.reactivex.observables.ConnectableObservable;
-import io.reactivex.plugins.RxJavaPlugins;
 
 /**
  * Helper utility class to support Observable with inner classes.
@@ -77,14 +74,14 @@ public final class ObservableInternalHelper {
 
         @Override
         public ObservableSource<T> apply(final T v) throws Exception {
-            return new ObservableTake<U>(itemDelay.apply(v), 1).map(Functions.justFunction(v)).defaultIfEmpty(v);
+            ObservableSource<U> o = ObjectHelper.requireNonNull(itemDelay.apply(v), "The itemDelay returned a null ObservableSource");
+            return new ObservableTake<U>(o, 1).map(Functions.justFunction(v)).defaultIfEmpty(v);
         }
     }
 
     public static <T, U> Function<T, ObservableSource<T>> itemDelay(final Function<? super T, ? extends ObservableSource<U>> itemDelay) {
         return new ItemDelayFunction<T, U>(itemDelay);
     }
-
 
     static final class ObserverOnNext<T> implements Consumer<T> {
         final Observer<T> observer;
@@ -165,7 +162,7 @@ public final class ObservableInternalHelper {
         @Override
         public ObservableSource<R> apply(final T t) throws Exception {
             @SuppressWarnings("unchecked")
-            ObservableSource<U> u = (ObservableSource<U>)mapper.apply(t);
+            ObservableSource<U> u = (ObservableSource<U>)ObjectHelper.requireNonNull(mapper.apply(t), "The mapper returned a null ObservableSource");
             return new ObservableMap<U, R>(u, new FlatMapWithCombinerInner<U, R, T>(combiner, t));
         }
     }
@@ -185,7 +182,7 @@ public final class ObservableInternalHelper {
 
         @Override
         public ObservableSource<U> apply(T t) throws Exception {
-            return new ObservableFromIterable<U>(mapper.apply(t));
+            return new ObservableFromIterable<U>(ObjectHelper.requireNonNull(mapper.apply(t), "The mapper returned a null Iterable"));
         }
     }
 
@@ -199,24 +196,6 @@ public final class ObservableInternalHelper {
         public Object apply(Object t) throws Exception {
             return 0;
         }
-    }
-
-    static final class RepeatWhenOuterHandler
-    implements Function<Observable<Notification<Object>>, ObservableSource<?>> {
-        private final Function<? super Observable<Object>, ? extends ObservableSource<?>> handler;
-
-        RepeatWhenOuterHandler(Function<? super Observable<Object>, ? extends ObservableSource<?>> handler) {
-            this.handler = handler;
-        }
-
-        @Override
-        public ObservableSource<?> apply(Observable<Notification<Object>> no) throws Exception {
-            return handler.apply(no.map(MapToInt.INSTANCE));
-        }
-    }
-
-    public static Function<Observable<Notification<Object>>, ObservableSource<?>> repeatWhenHandler(final Function<? super Observable<Object>, ? extends ObservableSource<?>> handler) {
-        return new RepeatWhenOuterHandler(handler);
     }
 
     public static <T> Callable<ConnectableObservable<T>> replayCallable(final Observable<T> parent) {
@@ -239,42 +218,6 @@ public final class ObservableInternalHelper {
         return new ReplayFunction<T, R>(selector, scheduler);
     }
 
-    enum ErrorMapperFilter implements Function<Notification<Object>, Throwable>, Predicate<Notification<Object>> {
-        INSTANCE;
-
-        @Override
-        public Throwable apply(Notification<Object> t) throws Exception {
-            return t.getError();
-        }
-
-        @Override
-        public boolean test(Notification<Object> t) throws Exception {
-            return t.isOnError();
-        }
-    }
-
-    static final class RetryWhenInner
-    implements Function<Observable<Notification<Object>>, ObservableSource<?>> {
-        private final Function<? super Observable<Throwable>, ? extends ObservableSource<?>> handler;
-
-        RetryWhenInner(
-                Function<? super Observable<Throwable>, ? extends ObservableSource<?>> handler) {
-            this.handler = handler;
-        }
-
-        @Override
-        public ObservableSource<?> apply(Observable<Notification<Object>> no) throws Exception {
-            Observable<Throwable> map = no
-                    .takeWhile(ErrorMapperFilter.INSTANCE)
-                    .map(ErrorMapperFilter.INSTANCE);
-            return handler.apply(map);
-        }
-    }
-
-    public static <T> Function<Observable<Notification<Object>>, ObservableSource<?>> retryWhenHandler(final Function<? super Observable<Throwable>, ? extends ObservableSource<?>> handler) {
-        return new RetryWhenInner(handler);
-    }
-
     static final class ZipIterableFunction<T, R>
     implements Function<List<ObservableSource<? extends T>>, ObservableSource<? extends R>> {
         private final Function<? super Object[], ? extends R> zipper;
@@ -291,37 +234,6 @@ public final class ObservableInternalHelper {
 
     public static <T, R> Function<List<ObservableSource<? extends T>>, ObservableSource<? extends R>> zipIterable(final Function<? super Object[], ? extends R> zipper) {
         return new ZipIterableFunction<T, R>(zipper);
-    }
-
-    public static <T,R> Observable<R> switchMapSingle(Observable<T> source, final Function<? super T, ? extends SingleSource<? extends R>> mapper) {
-        return source.switchMap(convertSingleMapperToObservableMapper(mapper), 1);
-    }
-
-    public static <T,R> Observable<R> switchMapSingleDelayError(Observable<T> source,
-            Function<? super T, ? extends SingleSource<? extends R>> mapper) {
-        return source.switchMapDelayError(convertSingleMapperToObservableMapper(mapper), 1);
-    }
-
-    private static <T, R> Function<T, Observable<R>> convertSingleMapperToObservableMapper(
-            final Function<? super T, ? extends SingleSource<? extends R>> mapper) {
-        ObjectHelper.requireNonNull(mapper, "mapper is null");
-        return new ObservableMapper<T,R>(mapper);
-    }
-
-    static final class ObservableMapper<T,R> implements Function<T,Observable<R>> {
-
-        final Function<? super T, ? extends SingleSource<? extends R>> mapper;
-
-        ObservableMapper(Function<? super T, ? extends SingleSource<? extends R>> mapper) {
-            this.mapper = mapper;
-        }
-
-        @Override
-        public Observable<R> apply(T t) throws Exception {
-            return RxJavaPlugins.onAssembly(new SingleToObservable<R>(
-                ObjectHelper.requireNonNull(mapper.apply(t), "The mapper returned a null value")));
-        }
-
     }
 
     static final class ReplayCallable<T> implements Callable<ConnectableObservable<T>> {
@@ -403,7 +315,8 @@ public final class ObservableInternalHelper {
 
         @Override
         public ObservableSource<R> apply(Observable<T> t) throws Exception {
-            return Observable.wrap(selector.apply(t)).observeOn(scheduler);
+            ObservableSource<R> apply = ObjectHelper.requireNonNull(selector.apply(t), "The selector returned a null ObservableSource");
+            return Observable.wrap(apply).observeOn(scheduler);
         }
     }
 }

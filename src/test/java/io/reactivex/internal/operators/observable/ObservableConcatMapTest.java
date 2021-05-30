@@ -13,18 +13,21 @@
 
 package io.reactivex.internal.operators.observable;
 
+import static org.junit.Assert.*;
+
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 
 import io.reactivex.*;
-import io.reactivex.disposables.Disposables;
-import io.reactivex.exceptions.TestException;
-import io.reactivex.functions.Function;
+import io.reactivex.disposables.*;
+import io.reactivex.exceptions.*;
+import io.reactivex.functions.*;
+import io.reactivex.internal.functions.Functions;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
-import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subjects.*;
 
 public class ObservableConcatMapTest {
@@ -229,7 +232,7 @@ public class ObservableConcatMapTest {
 
     @Test
     public void onErrorRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             List<Throwable> errors = TestHelper.trackPluginErrors();
             try {
                 final PublishSubject<Integer> ps1 = PublishSubject.create();
@@ -258,7 +261,7 @@ public class ObservableConcatMapTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
                 to.assertFailure(TestException.class);
 
@@ -366,5 +369,156 @@ public class ObservableConcatMapTest {
         } finally {
             RxJavaPlugins.reset();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void concatReportsDisposedOnComplete() {
+        final Disposable[] disposable = { null };
+
+        Observable.fromArray(Observable.just(1), Observable.just(2))
+        .hide()
+        .concatMap(Functions.<Observable<Integer>>identity())
+        .subscribe(new Observer<Integer>() {
+
+            @Override
+            public void onSubscribe(Disposable d) {
+                disposable[0] = d;
+            }
+
+            @Override
+            public void onNext(Integer t) {
+            }
+
+            @Override
+            public void onError(Throwable e) {
+            }
+
+            @Override
+            public void onComplete() {
+            }
+        });
+
+        assertTrue(disposable[0].isDisposed());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void concatReportsDisposedOnError() {
+        final Disposable[] disposable = { null };
+
+        Observable.fromArray(Observable.just(1), Observable.<Integer>error(new TestException()))
+        .hide()
+        .concatMap(Functions.<Observable<Integer>>identity())
+        .subscribe(new Observer<Integer>() {
+
+            @Override
+            public void onSubscribe(Disposable d) {
+                disposable[0] = d;
+            }
+
+            @Override
+            public void onNext(Integer t) {
+            }
+
+            @Override
+            public void onError(Throwable e) {
+            }
+
+            @Override
+            public void onComplete() {
+            }
+        });
+
+        assertTrue(disposable[0].isDisposed());
+    }
+
+    @Test
+    public void reentrantNoOverflow() {
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            final PublishSubject<Integer> ps = PublishSubject.create();
+
+            TestObserver<Integer> to = ps.concatMap(new Function<Integer, Observable<Integer>>() {
+                @Override
+                public Observable<Integer> apply(Integer v)
+                        throws Exception {
+                    return Observable.just(v + 1);
+                }
+            }, 1)
+            .subscribeWith(new TestObserver<Integer>() {
+                @Override
+                public void onNext(Integer t) {
+                    super.onNext(t);
+                    if (t == 1) {
+                        for (int i = 1; i < 10; i++) {
+                            ps.onNext(i);
+                        }
+                        ps.onComplete();
+                    }
+                }
+            });
+
+            ps.onNext(0);
+
+            if (!errors.isEmpty()) {
+                to.onError(new CompositeException(errors));
+            }
+
+            to.assertResult(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        } finally {
+            RxJavaPlugins.reset();
+        }
+    }
+
+    @Test
+    public void reentrantNoOverflowHidden() {
+        final PublishSubject<Integer> ps = PublishSubject.create();
+
+        TestObserver<Integer> to = ps.concatMap(new Function<Integer, Observable<Integer>>() {
+            @Override
+            public Observable<Integer> apply(Integer v)
+                    throws Exception {
+                return Observable.just(v + 1).hide();
+            }
+        }, 1)
+        .subscribeWith(new TestObserver<Integer>() {
+            @Override
+            public void onNext(Integer t) {
+                super.onNext(t);
+                if (t == 1) {
+                    for (int i = 1; i < 10; i++) {
+                        ps.onNext(i);
+                    }
+                    ps.onComplete();
+                }
+            }
+        });
+
+        ps.onNext(0);
+
+        to.assertResult(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    }
+
+    @Test
+    public void noCancelPrevious() {
+        final AtomicInteger counter = new AtomicInteger();
+
+        Observable.range(1, 5)
+        .concatMap(new Function<Integer, ObservableSource<Integer>>() {
+            @Override
+            public ObservableSource<Integer> apply(Integer v) throws Exception {
+                return Observable.just(v).doOnDispose(new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        counter.getAndIncrement();
+                    }
+                });
+            }
+        })
+        .test()
+        .assertResult(1, 2, 3, 4, 5);
+
+        assertEquals(0, counter.get());
     }
 }

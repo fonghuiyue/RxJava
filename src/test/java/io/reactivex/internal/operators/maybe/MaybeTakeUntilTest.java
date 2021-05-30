@@ -25,7 +25,7 @@ import io.reactivex.functions.Function;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.processors.PublishProcessor;
-import io.reactivex.schedulers.Schedulers;
+import io.reactivex.subjects.MaybeSubject;
 
 public class MaybeTakeUntilTest {
 
@@ -146,7 +146,7 @@ public class MaybeTakeUntilTest {
 
     @Test
     public void onErrorRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishProcessor<Integer> pp1 = PublishProcessor.create();
             final PublishProcessor<Integer> pp2 = PublishProcessor.create();
 
@@ -171,7 +171,7 @@ public class MaybeTakeUntilTest {
                     }
                 };
 
-                TestHelper.race(r1, r2, Schedulers.single());
+                TestHelper.race(r1, r2);
 
                 to.assertFailure(TestException.class);
 
@@ -188,7 +188,7 @@ public class MaybeTakeUntilTest {
 
     @Test
     public void onCompleteRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final PublishProcessor<Integer> pp1 = PublishProcessor.create();
             final PublishProcessor<Integer> pp2 = PublishProcessor.create();
 
@@ -207,9 +207,261 @@ public class MaybeTakeUntilTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             to.assertResult();
         }
+    }
+
+    @Test
+    public void untilMaybeMainSuccess() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        MaybeSubject<Integer> other = MaybeSubject.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasObservers());
+
+        main.onSuccess(1);
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasObservers());
+
+        to.assertResult(1);
+    }
+
+    @Test
+    public void untilMaybeMainComplete() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        MaybeSubject<Integer> other = MaybeSubject.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasObservers());
+
+        main.onComplete();
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasObservers());
+
+        to.assertResult();
+    }
+
+    @Test
+    public void untilMaybeMainError() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        MaybeSubject<Integer> other = MaybeSubject.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasObservers());
+
+        main.onError(new TestException());
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasObservers());
+
+        to.assertFailure(TestException.class);
+    }
+
+    @Test
+    public void untilMaybeOtherSuccess() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        MaybeSubject<Integer> other = MaybeSubject.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasObservers());
+
+        other.onSuccess(1);
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasObservers());
+
+        to.assertResult();
+    }
+
+    @Test
+    public void untilMaybeOtherComplete() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        MaybeSubject<Integer> other = MaybeSubject.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasObservers());
+
+        other.onComplete();
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasObservers());
+
+        to.assertResult();
+    }
+
+    @Test
+    public void untilMaybeOtherError() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        MaybeSubject<Integer> other = MaybeSubject.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasObservers());
+
+        other.onError(new TestException());
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasObservers());
+
+        to.assertFailure(TestException.class);
+    }
+
+    @Test
+    public void untilMaybeDispose() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        MaybeSubject<Integer> other = MaybeSubject.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasObservers());
+
+        to.dispose();
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasObservers());
+
+        to.assertEmpty();
+    }
+
+    @Test
+    public void untilPublisherMainSuccess() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasSubscribers());
+
+        main.onSuccess(1);
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasSubscribers());
+
+        to.assertResult(1);
+    }
+
+    @Test
+    public void untilPublisherMainComplete() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasSubscribers());
+
+        main.onComplete();
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasSubscribers());
+
+        to.assertResult();
+    }
+
+    @Test
+    public void untilPublisherMainError() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasSubscribers());
+
+        main.onError(new TestException());
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasSubscribers());
+
+        to.assertFailure(TestException.class);
+    }
+
+    @Test
+    public void untilPublisherOtherOnNext() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasSubscribers());
+
+        other.onNext(1);
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasSubscribers());
+
+        to.assertResult();
+    }
+
+    @Test
+    public void untilPublisherOtherOnComplete() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasSubscribers());
+
+        other.onComplete();
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasSubscribers());
+
+        to.assertResult();
+    }
+
+    @Test
+    public void untilPublisherOtherError() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasSubscribers());
+
+        other.onError(new TestException());
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasSubscribers());
+
+        to.assertFailure(TestException.class);
+    }
+
+    @Test
+    public void untilPublisherDispose() {
+        MaybeSubject<Integer> main = MaybeSubject.create();
+        PublishProcessor<Integer> other = PublishProcessor.create();
+
+        TestObserver<Integer> to = main.takeUntil(other).test();
+
+        assertTrue("Main no observers?", main.hasObservers());
+        assertTrue("Other no observers?", other.hasSubscribers());
+
+        to.dispose();
+
+        assertFalse("Main has observers?", main.hasObservers());
+        assertFalse("Other has observers?", other.hasSubscribers());
+
+        to.assertEmpty();
     }
 }

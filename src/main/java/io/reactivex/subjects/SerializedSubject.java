@@ -14,6 +14,7 @@
 package io.reactivex.subjects;
 
 import io.reactivex.Observer;
+import io.reactivex.annotations.Nullable;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.internal.util.*;
 import io.reactivex.internal.util.AppendOnlyLinkedArrayList.NonThrowingPredicate;
@@ -48,9 +49,8 @@ import io.reactivex.plugins.RxJavaPlugins;
         actual.subscribe(observer);
     }
 
-
     @Override
-    public void onSubscribe(Disposable s) {
+    public void onSubscribe(Disposable d) {
         boolean cancel;
         if (!done) {
             synchronized (this) {
@@ -63,7 +63,7 @@ import io.reactivex.plugins.RxJavaPlugins;
                             q = new AppendOnlyLinkedArrayList<Object>(4);
                             queue = q;
                         }
-                        q.add(NotificationLite.disposable(s));
+                        q.add(NotificationLite.disposable(d));
                         return;
                     }
                     emitting = true;
@@ -74,9 +74,9 @@ import io.reactivex.plugins.RxJavaPlugins;
             cancel = true;
         }
         if (cancel) {
-            s.dispose();
+            d.dispose();
         } else {
-            actual.onSubscribe(s);
+            actual.onSubscribe(d);
             emitLoop();
         }
     }
@@ -193,6 +193,7 @@ import io.reactivex.plugins.RxJavaPlugins;
     }
 
     @Override
+    @Nullable
     public Throwable getThrowable() {
         return actual.getThrowable();
     }

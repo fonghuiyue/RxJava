@@ -13,7 +13,6 @@
 
 package io.reactivex.internal.operators.observable;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.concurrent.TimeUnit;
@@ -24,6 +23,7 @@ import org.mockito.InOrder;
 import io.reactivex.*;
 import io.reactivex.disposables.*;
 import io.reactivex.exceptions.TestException;
+import io.reactivex.functions.Function;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.schedulers.*;
 import io.reactivex.subjects.PublishSubject;
@@ -265,17 +265,17 @@ public class ObservableSampleTest {
 
     @Test
     public void testSampleUnsubscribe() {
-        final Disposable s = mock(Disposable.class);
+        final Disposable upstream = mock(Disposable.class);
         Observable<Integer> o = Observable.unsafeCreate(
                 new ObservableSource<Integer>() {
                     @Override
                     public void subscribe(Observer<? super Integer> observer) {
-                        observer.onSubscribe(s);
+                        observer.onSubscribe(upstream);
                     }
                 }
         );
         o.throttleLast(1, TimeUnit.MILLISECONDS).subscribe().dispose();
-        verify(s).dispose();
+        verify(upstream).dispose();
     }
 
     @Test
@@ -319,20 +319,20 @@ public class ObservableSampleTest {
 
     @Test
     public void emitLastTimedRunCompleteRace() {
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final TestScheduler scheduler = new TestScheduler();
 
-            final PublishSubject<Integer> pp = PublishSubject.create();
+            final PublishSubject<Integer> ps = PublishSubject.create();
 
-            TestObserver<Integer> ts = pp.sample(1, TimeUnit.SECONDS, scheduler, true)
+            TestObserver<Integer> to = ps.sample(1, TimeUnit.SECONDS, scheduler, true)
             .test();
 
-            pp.onNext(1);
+            ps.onNext(1);
 
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    pp.onComplete();
+                    ps.onComplete();
                 }
             };
 
@@ -345,7 +345,7 @@ public class ObservableSampleTest {
 
             TestHelper.race(r1, r2);
 
-            ts.assertResult(1);
+            to.assertResult(1);
         }
     }
 
@@ -367,19 +367,19 @@ public class ObservableSampleTest {
 
     @Test
     public void emitLastOtherRunCompleteRace() {
-        for (int i = 0; i < 1000; i++) {
-            final PublishSubject<Integer> pp = PublishSubject.create();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final PublishSubject<Integer> ps = PublishSubject.create();
             final PublishSubject<Integer> sampler = PublishSubject.create();
 
-            TestObserver<Integer> ts = pp.sample(sampler, true)
+            TestObserver<Integer> to = ps.sample(sampler, true)
             .test();
 
-            pp.onNext(1);
+            ps.onNext(1);
 
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    pp.onComplete();
+                    ps.onComplete();
                 }
             };
 
@@ -392,24 +392,24 @@ public class ObservableSampleTest {
 
             TestHelper.race(r1, r2);
 
-            ts.assertResult(1);
+            to.assertResult(1);
         }
     }
 
     @Test
     public void emitLastOtherCompleteCompleteRace() {
-        for (int i = 0; i < 1000; i++) {
-            final PublishSubject<Integer> pp = PublishSubject.create();
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
+            final PublishSubject<Integer> ps = PublishSubject.create();
             final PublishSubject<Integer> sampler = PublishSubject.create();
 
-            TestObserver<Integer> ts = pp.sample(sampler, true).test();
+            TestObserver<Integer> to = ps.sample(sampler, true).test();
 
-            pp.onNext(1);
+            ps.onNext(1);
 
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    pp.onComplete();
+                    ps.onComplete();
                 }
             };
 
@@ -422,8 +422,19 @@ public class ObservableSampleTest {
 
             TestHelper.race(r1, r2);
 
-            ts.assertResult(1);
+            to.assertResult(1);
         }
+    }
+
+    @Test
+    public void doubleOnSubscribe() {
+        TestHelper.checkDoubleOnSubscribeObservable(new Function<Observable<Object>, Observable<Object>>() {
+            @Override
+            public Observable<Object> apply(Observable<Object> o)
+                    throws Exception {
+                return o.sample(1, TimeUnit.SECONDS);
+            }
+        });
     }
 
 }

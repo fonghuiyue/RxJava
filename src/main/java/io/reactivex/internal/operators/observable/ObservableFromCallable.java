@@ -30,10 +30,11 @@ public final class ObservableFromCallable<T> extends Observable<T> implements Ca
     public ObservableFromCallable(Callable<? extends T> callable) {
         this.callable = callable;
     }
+
     @Override
-    public void subscribeActual(Observer<? super T> s) {
-        DeferredScalarDisposable<T> d = new DeferredScalarDisposable<T>(s);
-        s.onSubscribe(d);
+    public void subscribeActual(Observer<? super T> observer) {
+        DeferredScalarDisposable<T> d = new DeferredScalarDisposable<T>(observer);
+        observer.onSubscribe(d);
         if (d.isDisposed()) {
             return;
         }
@@ -43,7 +44,7 @@ public final class ObservableFromCallable<T> extends Observable<T> implements Ca
         } catch (Throwable e) {
             Exceptions.throwIfFatal(e);
             if (!d.isDisposed()) {
-                s.onError(e);
+                observer.onError(e);
             } else {
                 RxJavaPlugins.onError(e);
             }
@@ -54,6 +55,6 @@ public final class ObservableFromCallable<T> extends Observable<T> implements Ca
 
     @Override
     public T call() throws Exception {
-        return callable.call();
+        return ObjectHelper.requireNonNull(callable.call(), "The callable returned a null value");
     }
 }

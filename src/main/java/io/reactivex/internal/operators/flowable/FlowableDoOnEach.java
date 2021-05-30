@@ -21,6 +21,7 @@ import io.reactivex.exceptions.*;
 import io.reactivex.functions.*;
 import io.reactivex.internal.fuseable.ConditionalSubscriber;
 import io.reactivex.internal.subscribers.*;
+import io.reactivex.internal.util.ExceptionHelper;
 import io.reactivex.plugins.RxJavaPlugins;
 
 public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T> {
@@ -77,7 +78,7 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
             }
 
             if (sourceMode != NONE) {
-                actual.onNext(null);
+                downstream.onNext(null);
                 return;
             }
 
@@ -88,7 +89,7 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
                 return;
             }
 
-            actual.onNext(t);
+            downstream.onNext(t);
         }
 
         @Override
@@ -103,11 +104,11 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
                 onError.accept(t);
             } catch (Throwable e) {
                 Exceptions.throwIfFatal(e);
-                actual.onError(new CompositeException(t, e));
+                downstream.onError(new CompositeException(t, e));
                 relay = false;
             }
             if (relay) {
-                actual.onError(t);
+                downstream.onError(t);
             }
 
             try {
@@ -131,7 +132,7 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
             }
 
             done = true;
-            actual.onComplete();
+            downstream.onComplete();
 
             try {
                 onAfterTerminate.run();
@@ -149,11 +150,33 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
         @Nullable
         @Override
         public T poll() throws Exception {
-            T v = qs.poll();
+            T v;
+
+            try {
+                v = qs.poll();
+            } catch (Throwable ex) {
+                Exceptions.throwIfFatal(ex);
+                try {
+                    onError.accept(ex);
+                } catch (Throwable exc) {
+                    throw new CompositeException(ex, exc);
+                }
+                throw ExceptionHelper.<Exception>throwIfThrowable(ex);
+            }
 
             if (v != null) {
                 try {
-                    onNext.accept(v);
+                    try {
+                        onNext.accept(v);
+                    } catch (Throwable ex) {
+                        Exceptions.throwIfFatal(ex);
+                        try {
+                            onError.accept(ex);
+                        } catch (Throwable exc) {
+                            throw new CompositeException(ex, exc);
+                        }
+                        throw ExceptionHelper.<Exception>throwIfThrowable(ex);
+                    }
                 } finally {
                     onAfterTerminate.run();
                 }
@@ -194,7 +217,7 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
             }
 
             if (sourceMode != NONE) {
-                actual.onNext(null);
+                downstream.onNext(null);
                 return;
             }
 
@@ -205,7 +228,7 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
                 return;
             }
 
-            actual.onNext(t);
+            downstream.onNext(t);
         }
 
         @Override
@@ -221,7 +244,7 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
                 return false;
             }
 
-            return actual.tryOnNext(t);
+            return downstream.tryOnNext(t);
         }
 
         @Override
@@ -236,11 +259,11 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
                 onError.accept(t);
             } catch (Throwable e) {
                 Exceptions.throwIfFatal(e);
-                actual.onError(new CompositeException(t, e));
+                downstream.onError(new CompositeException(t, e));
                 relay = false;
             }
             if (relay) {
-                actual.onError(t);
+                downstream.onError(t);
             }
 
             try {
@@ -264,7 +287,7 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
             }
 
             done = true;
-            actual.onComplete();
+            downstream.onComplete();
 
             try {
                 onAfterTerminate.run();
@@ -282,11 +305,33 @@ public final class FlowableDoOnEach<T> extends AbstractFlowableWithUpstream<T, T
         @Nullable
         @Override
         public T poll() throws Exception {
-            T v = qs.poll();
+            T v;
+
+            try {
+                v = qs.poll();
+            } catch (Throwable ex) {
+                Exceptions.throwIfFatal(ex);
+                try {
+                    onError.accept(ex);
+                } catch (Throwable exc) {
+                    throw new CompositeException(ex, exc);
+                }
+                throw ExceptionHelper.<Exception>throwIfThrowable(ex);
+            }
 
             if (v != null) {
                 try {
-                    onNext.accept(v);
+                    try {
+                        onNext.accept(v);
+                    } catch (Throwable ex) {
+                        Exceptions.throwIfFatal(ex);
+                        try {
+                            onError.accept(ex);
+                        } catch (Throwable exc) {
+                            throw new CompositeException(ex, exc);
+                        }
+                        throw ExceptionHelper.<Exception>throwIfThrowable(ex);
+                    }
                 } finally {
                     onAfterTerminate.run();
                 }

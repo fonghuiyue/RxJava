@@ -13,29 +13,24 @@
 
 package io.reactivex.processors;
 
-import io.reactivex.TestHelper;
-import io.reactivex.exceptions.TestException;
-import io.reactivex.functions.Consumer;
-import io.reactivex.internal.fuseable.QueueSubscription;
-import io.reactivex.internal.subscriptions.BooleanSubscription;
-import io.reactivex.schedulers.Schedulers;
-import io.reactivex.subscribers.SubscriberFusion;
-import io.reactivex.subscribers.TestSubscriber;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.mockito.InOrder;
-import org.mockito.Mockito;
-import org.reactivestreams.Subscriber;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import org.junit.*;
+import org.mockito.*;
+import org.reactivestreams.Subscriber;
 
-public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
+import io.reactivex.TestHelper;
+import io.reactivex.exceptions.TestException;
+import io.reactivex.functions.Consumer;
+import io.reactivex.internal.fuseable.QueueFuseable;
+import io.reactivex.internal.subscriptions.BooleanSubscription;
+import io.reactivex.subscribers.*;
+
+public class AsyncProcessorTest extends FlowableProcessorTest<Object> {
 
     private final Throwable testException = new Throwable();
 
@@ -46,149 +41,149 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
 
     @Test
     public void testNeverCompleted() {
-        AsyncProcessor<String> subject = AsyncProcessor.create();
+        AsyncProcessor<String> processor = AsyncProcessor.create();
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
-        subject.subscribe(observer);
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
+        processor.subscribe(subscriber);
 
-        subject.onNext("one");
-        subject.onNext("two");
-        subject.onNext("three");
+        processor.onNext("one");
+        processor.onNext("two");
+        processor.onNext("three");
 
-        verify(observer, Mockito.never()).onNext(anyString());
-        verify(observer, Mockito.never()).onError(testException);
-        verify(observer, Mockito.never()).onComplete();
+        verify(subscriber, Mockito.never()).onNext(anyString());
+        verify(subscriber, Mockito.never()).onError(testException);
+        verify(subscriber, Mockito.never()).onComplete();
     }
 
     @Test
     public void testCompleted() {
-        AsyncProcessor<String> subject = AsyncProcessor.create();
+        AsyncProcessor<String> processor = AsyncProcessor.create();
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
-        subject.subscribe(observer);
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
+        processor.subscribe(subscriber);
 
-        subject.onNext("one");
-        subject.onNext("two");
-        subject.onNext("three");
-        subject.onComplete();
+        processor.onNext("one");
+        processor.onNext("two");
+        processor.onNext("three");
+        processor.onComplete();
 
-        verify(observer, times(1)).onNext("three");
-        verify(observer, Mockito.never()).onError(any(Throwable.class));
-        verify(observer, times(1)).onComplete();
+        verify(subscriber, times(1)).onNext("three");
+        verify(subscriber, Mockito.never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
     }
 
     @Test
     @Ignore("Null values not allowed")
     public void testNull() {
-        AsyncProcessor<String> subject = AsyncProcessor.create();
+        AsyncProcessor<String> processor = AsyncProcessor.create();
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
-        subject.subscribe(observer);
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
+        processor.subscribe(subscriber);
 
-        subject.onNext(null);
-        subject.onComplete();
+        processor.onNext(null);
+        processor.onComplete();
 
-        verify(observer, times(1)).onNext(null);
-        verify(observer, Mockito.never()).onError(any(Throwable.class));
-        verify(observer, times(1)).onComplete();
+        verify(subscriber, times(1)).onNext(null);
+        verify(subscriber, Mockito.never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
     }
 
     @Test
     public void testSubscribeAfterCompleted() {
-        AsyncProcessor<String> subject = AsyncProcessor.create();
+        AsyncProcessor<String> processor = AsyncProcessor.create();
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
 
-        subject.onNext("one");
-        subject.onNext("two");
-        subject.onNext("three");
-        subject.onComplete();
+        processor.onNext("one");
+        processor.onNext("two");
+        processor.onNext("three");
+        processor.onComplete();
 
-        subject.subscribe(observer);
+        processor.subscribe(subscriber);
 
-        verify(observer, times(1)).onNext("three");
-        verify(observer, Mockito.never()).onError(any(Throwable.class));
-        verify(observer, times(1)).onComplete();
+        verify(subscriber, times(1)).onNext("three");
+        verify(subscriber, Mockito.never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
     }
 
     @Test
     public void testSubscribeAfterError() {
-        AsyncProcessor<String> subject = AsyncProcessor.create();
+        AsyncProcessor<String> processor = AsyncProcessor.create();
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
 
-        subject.onNext("one");
-        subject.onNext("two");
-        subject.onNext("three");
+        processor.onNext("one");
+        processor.onNext("two");
+        processor.onNext("three");
 
         RuntimeException re = new RuntimeException("failed");
-        subject.onError(re);
+        processor.onError(re);
 
-        subject.subscribe(observer);
+        processor.subscribe(subscriber);
 
-        verify(observer, times(1)).onError(re);
-        verify(observer, Mockito.never()).onNext(any(String.class));
-        verify(observer, Mockito.never()).onComplete();
+        verify(subscriber, times(1)).onError(re);
+        verify(subscriber, Mockito.never()).onNext(any(String.class));
+        verify(subscriber, Mockito.never()).onComplete();
     }
 
     @Test
     public void testError() {
-        AsyncProcessor<String> subject = AsyncProcessor.create();
+        AsyncProcessor<String> processor = AsyncProcessor.create();
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
-        subject.subscribe(observer);
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
+        processor.subscribe(subscriber);
 
-        subject.onNext("one");
-        subject.onNext("two");
-        subject.onNext("three");
-        subject.onError(testException);
-        subject.onNext("four");
-        subject.onError(new Throwable());
-        subject.onComplete();
+        processor.onNext("one");
+        processor.onNext("two");
+        processor.onNext("three");
+        processor.onError(testException);
+        processor.onNext("four");
+        processor.onError(new Throwable());
+        processor.onComplete();
 
-        verify(observer, Mockito.never()).onNext(anyString());
-        verify(observer, times(1)).onError(testException);
-        verify(observer, Mockito.never()).onComplete();
+        verify(subscriber, Mockito.never()).onNext(anyString());
+        verify(subscriber, times(1)).onError(testException);
+        verify(subscriber, Mockito.never()).onComplete();
     }
 
     @Test
     public void testUnsubscribeBeforeCompleted() {
-        AsyncProcessor<String> subject = AsyncProcessor.create();
+        AsyncProcessor<String> processor = AsyncProcessor.create();
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
-        TestSubscriber<String> ts = new TestSubscriber<String>(observer);
-        subject.subscribe(ts);
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
+        TestSubscriber<String> ts = new TestSubscriber<String>(subscriber);
+        processor.subscribe(ts);
 
-        subject.onNext("one");
-        subject.onNext("two");
+        processor.onNext("one");
+        processor.onNext("two");
 
         ts.dispose();
 
-        verify(observer, Mockito.never()).onNext(anyString());
-        verify(observer, Mockito.never()).onError(any(Throwable.class));
-        verify(observer, Mockito.never()).onComplete();
+        verify(subscriber, Mockito.never()).onNext(anyString());
+        verify(subscriber, Mockito.never()).onError(any(Throwable.class));
+        verify(subscriber, Mockito.never()).onComplete();
 
-        subject.onNext("three");
-        subject.onComplete();
+        processor.onNext("three");
+        processor.onComplete();
 
-        verify(observer, Mockito.never()).onNext(anyString());
-        verify(observer, Mockito.never()).onError(any(Throwable.class));
-        verify(observer, Mockito.never()).onComplete();
+        verify(subscriber, Mockito.never()).onNext(anyString());
+        verify(subscriber, Mockito.never()).onError(any(Throwable.class));
+        verify(subscriber, Mockito.never()).onComplete();
     }
 
     @Test
     public void testEmptySubjectCompleted() {
-        AsyncProcessor<String> subject = AsyncProcessor.create();
+        AsyncProcessor<String> processor = AsyncProcessor.create();
 
-        Subscriber<String> observer = TestHelper.mockSubscriber();
-        subject.subscribe(observer);
+        Subscriber<String> subscriber = TestHelper.mockSubscriber();
+        processor.subscribe(subscriber);
 
-        subject.onComplete();
+        processor.onComplete();
 
-        InOrder inOrder = inOrder(observer);
-        inOrder.verify(observer, never()).onNext(null);
-        inOrder.verify(observer, never()).onNext(any(String.class));
-        inOrder.verify(observer, times(1)).onComplete();
+        InOrder inOrder = inOrder(subscriber);
+        inOrder.verify(subscriber, never()).onNext(null);
+        inOrder.verify(subscriber, never()).onNext(any(String.class));
+        inOrder.verify(subscriber, times(1)).onComplete();
         inOrder.verifyNoMoreInteractions();
     }
 
@@ -204,10 +199,10 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
          * With the synchronization code in place I can not get this to fail on my laptop.
          */
         for (int i = 0; i < 50; i++) {
-            final AsyncProcessor<String> subject = AsyncProcessor.create();
+            final AsyncProcessor<String> processor = AsyncProcessor.create();
             final AtomicReference<String> value1 = new AtomicReference<String>();
 
-            subject.subscribe(new Consumer<String>() {
+            processor.subscribe(new Consumer<String>() {
 
                 @Override
                 public void accept(String t1) {
@@ -226,15 +221,15 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
 
                 @Override
                 public void run() {
-                    subject.onNext("value");
-                    subject.onComplete();
+                    processor.onNext("value");
+                    processor.onComplete();
                 }
             });
 
-            SubjectSubscriberThread t2 = new SubjectSubscriberThread(subject);
-            SubjectSubscriberThread t3 = new SubjectSubscriberThread(subject);
-            SubjectSubscriberThread t4 = new SubjectSubscriberThread(subject);
-            SubjectSubscriberThread t5 = new SubjectSubscriberThread(subject);
+            SubjectSubscriberThread t2 = new SubjectSubscriberThread(processor);
+            SubjectSubscriberThread t3 = new SubjectSubscriberThread(processor);
+            SubjectSubscriberThread t4 = new SubjectSubscriberThread(processor);
+            SubjectSubscriberThread t5 = new SubjectSubscriberThread(processor);
 
             t2.start();
             t3.start();
@@ -262,18 +257,18 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
 
     private static class SubjectSubscriberThread extends Thread {
 
-        private final AsyncProcessor<String> subject;
+        private final AsyncProcessor<String> processor;
         private final AtomicReference<String> value = new AtomicReference<String>();
 
-        SubjectSubscriberThread(AsyncProcessor<String> subject) {
-            this.subject = subject;
+        SubjectSubscriberThread(AsyncProcessor<String> processor) {
+            this.processor = processor;
         }
 
         @Override
         public void run() {
             try {
                 // a timeout exception will happen if we don't get a terminal state
-                String v = subject.timeout(2000, TimeUnit.MILLISECONDS).blockingSingle();
+                String v = processor.timeout(2000, TimeUnit.MILLISECONDS).blockingSingle();
                 value.set(v);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -299,7 +294,6 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
 //        // even though the onError above throws we should still receive it on the other subscriber
 //        assertEquals(1, ts.getOnErrorEvents().size());
 //    }
-
 
     // FIXME subscriber methods are not allowed to throw
 //    /**
@@ -372,6 +366,7 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
         assertNull(as.getValue());
         assertNull(as.getThrowable());
     }
+
     @Test
     public void testCurrentStateMethodsError() {
         AsyncProcessor<Object> as = AsyncProcessor.create();
@@ -395,13 +390,13 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
     public void fusionLive() {
         AsyncProcessor<Integer> ap = new AsyncProcessor<Integer>();
 
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         ap.subscribe(ts);
 
         ts
         .assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.ASYNC));
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC));
 
         ts.assertNoValues().assertNoErrors().assertNotComplete();
 
@@ -420,13 +415,13 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
         ap.onNext(1);
         ap.onComplete();
 
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         ap.subscribe(ts);
 
         ts
         .assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.ASYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult(1);
     }
 
@@ -467,7 +462,7 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
     public void cancelRace() {
         AsyncProcessor<Object> p = AsyncProcessor.create();
 
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final TestSubscriber<Object> ts1 = p.test();
             final TestSubscriber<Object> ts2 = p.test();
 
@@ -485,14 +480,14 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 
     @Test
     public void onErrorCancelRace() {
 
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             final AsyncProcessor<Object> p = AsyncProcessor.create();
 
             final TestSubscriber<Object> ts1 = p.test();
@@ -513,7 +508,7 @@ public class AsyncProcessorTest extends DelayedFlowableProcessorTest<Object> {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
 
             if (ts1.errorCount() != 0) {
                 ts1.assertFailure(TestException.class);

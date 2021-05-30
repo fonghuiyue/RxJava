@@ -49,7 +49,7 @@ public final class MaybeDelayOtherPublisher<T, U> extends AbstractMaybeWithUpstr
 
         final Publisher<U> otherSource;
 
-        Disposable d;
+        Disposable upstream;
 
         DelayMaybeObserver(MaybeObserver<? super T> actual, Publisher<U> otherSource) {
             this.other = new OtherSubscriber<T>(actual);
@@ -58,42 +58,42 @@ public final class MaybeDelayOtherPublisher<T, U> extends AbstractMaybeWithUpstr
 
         @Override
         public void dispose() {
-            d.dispose();
-            d = DisposableHelper.DISPOSED;
+            upstream.dispose();
+            upstream = DisposableHelper.DISPOSED;
             SubscriptionHelper.cancel(other);
         }
 
         @Override
         public boolean isDisposed() {
-            return SubscriptionHelper.isCancelled(other.get());
+            return other.get() == SubscriptionHelper.CANCELLED;
         }
 
         @Override
         public void onSubscribe(Disposable d) {
-            if (DisposableHelper.validate(this.d, d)) {
-                this.d = d;
+            if (DisposableHelper.validate(this.upstream, d)) {
+                this.upstream = d;
 
-                other.actual.onSubscribe(this);
+                other.downstream.onSubscribe(this);
             }
         }
 
         @Override
         public void onSuccess(T value) {
-            d = DisposableHelper.DISPOSED;
+            upstream = DisposableHelper.DISPOSED;
             other.value = value;
             subscribeNext();
         }
 
         @Override
         public void onError(Throwable e) {
-            d = DisposableHelper.DISPOSED;
+            upstream = DisposableHelper.DISPOSED;
             other.error = e;
             subscribeNext();
         }
 
         @Override
         public void onComplete() {
-            d = DisposableHelper.DISPOSED;
+            upstream = DisposableHelper.DISPOSED;
             subscribeNext();
         }
 
@@ -108,21 +108,19 @@ public final class MaybeDelayOtherPublisher<T, U> extends AbstractMaybeWithUpstr
 
         private static final long serialVersionUID = -1215060610805418006L;
 
-        final MaybeObserver<? super T> actual;
+        final MaybeObserver<? super T> downstream;
 
         T value;
 
         Throwable error;
 
-        OtherSubscriber(MaybeObserver<? super T> actual) {
-            this.actual = actual;
+        OtherSubscriber(MaybeObserver<? super T> downstream) {
+            this.downstream = downstream;
         }
 
         @Override
         public void onSubscribe(Subscription s) {
-            if (SubscriptionHelper.setOnce(this, s)) {
-                s.request(Long.MAX_VALUE);
-            }
+            SubscriptionHelper.setOnce(this, s, Long.MAX_VALUE);
         }
 
         @Override
@@ -139,9 +137,9 @@ public final class MaybeDelayOtherPublisher<T, U> extends AbstractMaybeWithUpstr
         public void onError(Throwable t) {
             Throwable e = error;
             if (e == null) {
-                actual.onError(t);
+                downstream.onError(t);
             } else {
-                actual.onError(new CompositeException(e, t));
+                downstream.onError(new CompositeException(e, t));
             }
         }
 
@@ -149,13 +147,13 @@ public final class MaybeDelayOtherPublisher<T, U> extends AbstractMaybeWithUpstr
         public void onComplete() {
             Throwable e = error;
             if (e != null) {
-                actual.onError(e);
+                downstream.onError(e);
             } else {
                 T v = value;
                 if (v != null) {
-                    actual.onSuccess(v);
+                    downstream.onSuccess(v);
                 } else {
-                    actual.onComplete();
+                    downstream.onComplete();
                 }
             }
         }

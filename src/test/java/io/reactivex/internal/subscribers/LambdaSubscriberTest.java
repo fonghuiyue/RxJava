@@ -13,19 +13,20 @@
 
 package io.reactivex.internal.subscribers;
 
-import static org.junit.Assert.*;
-
-import java.util.*;
-
-import org.junit.Test;
-import org.reactivestreams.*;
-
 import io.reactivex.*;
 import io.reactivex.exceptions.*;
 import io.reactivex.functions.*;
+import io.reactivex.internal.functions.Functions;
+import io.reactivex.internal.operators.flowable.FlowableInternalHelper;
 import io.reactivex.internal.subscriptions.BooleanSubscription;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.processors.PublishProcessor;
+import org.junit.Test;
+import org.reactivestreams.*;
+
+import java.util.*;
+
+import static org.junit.Assert.*;
 
 public class LambdaSubscriberTest {
 
@@ -33,7 +34,7 @@ public class LambdaSubscriberTest {
     public void onSubscribeThrows() {
         final List<Object> received = new ArrayList<Object>();
 
-        LambdaSubscriber<Object> o = new LambdaSubscriber<Object>(new Consumer<Object>() {
+        LambdaSubscriber<Object> subscriber = new LambdaSubscriber<Object>(new Consumer<Object>() {
             @Override
             public void accept(Object v) throws Exception {
                 received.add(v);
@@ -56,21 +57,21 @@ public class LambdaSubscriberTest {
             }
         });
 
-        assertFalse(o.isDisposed());
+        assertFalse(subscriber.isDisposed());
 
-        Flowable.just(1).subscribe(o);
+        Flowable.just(1).subscribe(subscriber);
 
         assertTrue(received.toString(), received.get(0) instanceof TestException);
         assertEquals(received.toString(), 1, received.size());
 
-        assertTrue(o.isDisposed());
+        assertTrue(subscriber.isDisposed());
     }
 
     @Test
     public void onNextThrows() {
         final List<Object> received = new ArrayList<Object>();
 
-        LambdaSubscriber<Object> o = new LambdaSubscriber<Object>(new Consumer<Object>() {
+        LambdaSubscriber<Object> subscriber = new LambdaSubscriber<Object>(new Consumer<Object>() {
             @Override
             public void accept(Object v) throws Exception {
                 throw new TestException();
@@ -93,14 +94,14 @@ public class LambdaSubscriberTest {
             }
         });
 
-        assertFalse(o.isDisposed());
+        assertFalse(subscriber.isDisposed());
 
-        Flowable.just(1).subscribe(o);
+        Flowable.just(1).subscribe(subscriber);
 
         assertTrue(received.toString(), received.get(0) instanceof TestException);
         assertEquals(received.toString(), 1, received.size());
 
-        assertTrue(o.isDisposed());
+        assertTrue(subscriber.isDisposed());
     }
 
     @Test
@@ -110,7 +111,7 @@ public class LambdaSubscriberTest {
         try {
             final List<Object> received = new ArrayList<Object>();
 
-            LambdaSubscriber<Object> o = new LambdaSubscriber<Object>(new Consumer<Object>() {
+            LambdaSubscriber<Object> subscriber = new LambdaSubscriber<Object>(new Consumer<Object>() {
                 @Override
                 public void accept(Object v) throws Exception {
                     received.add(v);
@@ -133,13 +134,13 @@ public class LambdaSubscriberTest {
                 }
             });
 
-            assertFalse(o.isDisposed());
+            assertFalse(subscriber.isDisposed());
 
-            Flowable.<Integer>error(new TestException("Outer")).subscribe(o);
+            Flowable.<Integer>error(new TestException("Outer")).subscribe(subscriber);
 
             assertTrue(received.toString(), received.isEmpty());
 
-            assertTrue(o.isDisposed());
+            assertTrue(subscriber.isDisposed());
 
             TestHelper.assertError(errors, 0, CompositeException.class);
             List<Throwable> ce = TestHelper.compositeList(errors.get(0));
@@ -157,7 +158,7 @@ public class LambdaSubscriberTest {
         try {
             final List<Object> received = new ArrayList<Object>();
 
-            LambdaSubscriber<Object> o = new LambdaSubscriber<Object>(new Consumer<Object>() {
+            LambdaSubscriber<Object> subscriber = new LambdaSubscriber<Object>(new Consumer<Object>() {
                 @Override
                 public void accept(Object v) throws Exception {
                     received.add(v);
@@ -180,13 +181,13 @@ public class LambdaSubscriberTest {
                 }
             });
 
-            assertFalse(o.isDisposed());
+            assertFalse(subscriber.isDisposed());
 
-            Flowable.<Integer>empty().subscribe(o);
+            Flowable.<Integer>empty().subscribe(subscriber);
 
             assertTrue(received.toString(), received.isEmpty());
 
-            assertTrue(o.isDisposed());
+            assertTrue(subscriber.isDisposed());
 
             TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
@@ -214,7 +215,7 @@ public class LambdaSubscriberTest {
 
         final List<Object> received = new ArrayList<Object>();
 
-        LambdaSubscriber<Object> o = new LambdaSubscriber<Object>(new Consumer<Object>() {
+        LambdaSubscriber<Object> subscriber = new LambdaSubscriber<Object>(new Consumer<Object>() {
             @Override
             public void accept(Object v) throws Exception {
                 received.add(v);
@@ -237,10 +238,11 @@ public class LambdaSubscriberTest {
             }
         });
 
-        source.subscribe(o);
+        source.subscribe(subscriber);
 
         assertEquals(Arrays.asList(1, 100), received);
     }
+
     @Test
     public void badSourceEmitAfterDone() {
         Flowable<Integer> source = Flowable.fromPublisher(new Publisher<Integer>() {
@@ -259,7 +261,7 @@ public class LambdaSubscriberTest {
 
         final List<Object> received = new ArrayList<Object>();
 
-        LambdaSubscriber<Object> o = new LambdaSubscriber<Object>(new Consumer<Object>() {
+        LambdaSubscriber<Object> subscriber = new LambdaSubscriber<Object>(new Consumer<Object>() {
             @Override
             public void accept(Object v) throws Exception {
                 received.add(v);
@@ -282,18 +284,18 @@ public class LambdaSubscriberTest {
             }
         });
 
-        source.subscribe(o);
+        source.subscribe(subscriber);
 
         assertEquals(Arrays.asList(1, 100), received);
     }
 
     @Test
     public void onNextThrowsCancelsUpstream() {
-        PublishProcessor<Integer> ps = PublishProcessor.create();
+        PublishProcessor<Integer> pp = PublishProcessor.create();
 
         final List<Throwable> errors = new ArrayList<Throwable>();
 
-        ps.subscribe(new Consumer<Integer>() {
+        pp.subscribe(new Consumer<Integer>() {
             @Override
             public void accept(Integer v) throws Exception {
                 throw new TestException();
@@ -305,12 +307,12 @@ public class LambdaSubscriberTest {
             }
         });
 
-        assertTrue("No observers?!", ps.hasSubscribers());
+        assertTrue("No observers?!", pp.hasSubscribers());
         assertTrue("Has errors already?!", errors.isEmpty());
 
-        ps.onNext(1);
+        pp.onNext(1);
 
-        assertFalse("Has observers?!", ps.hasSubscribers());
+        assertFalse("Has observers?!", pp.hasSubscribers());
         assertFalse("No errors?!", errors.isEmpty());
 
         assertTrue(errors.toString(), errors.get(0) instanceof TestException);
@@ -318,11 +320,11 @@ public class LambdaSubscriberTest {
 
     @Test
     public void onSubscribeThrowsCancelsUpstream() {
-        PublishProcessor<Integer> ps = PublishProcessor.create();
+        PublishProcessor<Integer> pp = PublishProcessor.create();
 
         final List<Throwable> errors = new ArrayList<Throwable>();
 
-        ps.subscribe(new Consumer<Integer>() {
+        pp.subscribe(new Consumer<Integer>() {
             @Override
             public void accept(Integer v) throws Exception {
             }
@@ -342,9 +344,29 @@ public class LambdaSubscriberTest {
             }
         });
 
-        assertFalse("Has observers?!", ps.hasSubscribers());
+        assertFalse("Has observers?!", pp.hasSubscribers());
         assertFalse("No errors?!", errors.isEmpty());
 
         assertTrue(errors.toString(), errors.get(0) instanceof TestException);
+    }
+
+    @Test
+    public void onErrorMissingShouldReportNoCustomOnError() {
+        LambdaSubscriber<Integer> subscriber = new LambdaSubscriber<Integer>(Functions.<Integer>emptyConsumer(),
+                Functions.ON_ERROR_MISSING,
+                Functions.EMPTY_ACTION,
+                FlowableInternalHelper.RequestMax.INSTANCE);
+
+        assertFalse(subscriber.hasCustomOnError());
+    }
+
+    @Test
+    public void customOnErrorShouldReportCustomOnError() {
+        LambdaSubscriber<Integer> subscriber = new LambdaSubscriber<Integer>(Functions.<Integer>emptyConsumer(),
+                Functions.<Throwable>emptyConsumer(),
+                Functions.EMPTY_ACTION,
+                FlowableInternalHelper.RequestMax.INSTANCE);
+
+        assertTrue(subscriber.hasCustomOnError());
     }
 }

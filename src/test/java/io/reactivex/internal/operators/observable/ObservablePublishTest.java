@@ -19,7 +19,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
-import org.junit.Test;
+import org.junit.*;
 
 import io.reactivex.*;
 import io.reactivex.Observable;
@@ -36,6 +36,27 @@ import io.reactivex.schedulers.*;
 import io.reactivex.subjects.PublishSubject;
 
 public class ObservablePublishTest {
+
+    // This will undo the workaround so that the plain ObservablePublish is still
+    // tested.
+    @Before
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    public void before() {
+        RxJavaPlugins.setOnConnectableObservableAssembly(new Function<ConnectableObservable, ConnectableObservable>() {
+            @Override
+            public ConnectableObservable apply(ConnectableObservable co) throws Exception {
+                if (co instanceof ObservablePublishAlt) {
+                    return ObservablePublish.create(((ObservablePublishAlt)co).source());
+                }
+                return co;
+            }
+        });
+    }
+
+    @After
+    public void after() {
+        RxJavaPlugins.setOnConnectableObservableAssembly(null);
+    }
 
     @Test
     public void testPublish() throws InterruptedException {
@@ -79,14 +100,14 @@ public class ObservablePublishTest {
             }
         });
 
-        Disposable s = o.connect();
+        Disposable connection = o.connect();
         try {
             if (!latch.await(1000, TimeUnit.MILLISECONDS)) {
                 fail("subscriptions did not receive values");
             }
             assertEquals(1, counter.get());
         } finally {
-            s.dispose();
+            connection.dispose();
         }
     }
 
@@ -125,12 +146,12 @@ public class ObservablePublishTest {
 
         });
 
-        TestObserver<Integer> ts = new TestObserver<Integer>();
-        Observable.merge(fast, slow).subscribe(ts);
+        TestObserver<Integer> to = new TestObserver<Integer>();
+        Observable.merge(fast, slow).subscribe(to);
         is.connect();
-        ts.awaitTerminalEvent();
-        ts.assertNoErrors();
-        assertEquals(Flowable.bufferSize() * 4, ts.valueCount());
+        to.awaitTerminalEvent();
+        to.assertNoErrors();
+        assertEquals(Flowable.bufferSize() * 4, to.valueCount());
     }
 
     // use case from https://github.com/ReactiveX/RxJava/issues/1732
@@ -145,7 +166,7 @@ public class ObservablePublishTest {
             }
 
         });
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
         xs.publish(new Function<Observable<Integer>, Observable<Integer>>() {
 
             @Override
@@ -160,19 +181,19 @@ public class ObservablePublishTest {
                 }));
             }
 
-        }).subscribe(ts);
-        ts.awaitTerminalEvent();
-        ts.assertNoErrors();
-        ts.assertValues(0, 1, 2, 3);
+        }).subscribe(to);
+        to.awaitTerminalEvent();
+        to.assertNoErrors();
+        to.assertValues(0, 1, 2, 3);
         assertEquals(5, emitted.get());
-        System.out.println(ts.values());
+        System.out.println(to.values());
     }
 
     // use case from https://github.com/ReactiveX/RxJava/issues/1732
     @Test
     public void testTakeUntilWithPublishedStream() {
         Observable<Integer> xs = Observable.range(0, Flowable.bufferSize() * 2);
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
         ConnectableObservable<Integer> xsp = xs.publish();
         xsp.takeUntil(xsp.skipWhile(new Predicate<Integer>() {
 
@@ -181,9 +202,9 @@ public class ObservablePublishTest {
                 return i <= 3;
             }
 
-        })).subscribe(ts);
+        })).subscribe(to);
         xsp.connect();
-        System.out.println(ts.values());
+        System.out.println(to.values());
     }
 
     @Test(timeout = 10000)
@@ -208,9 +229,9 @@ public class ObservablePublishTest {
         final AtomicBoolean child1Unsubscribed = new AtomicBoolean();
         final AtomicBoolean child2Unsubscribed = new AtomicBoolean();
 
-        final TestObserver<Integer> ts2 = new TestObserver<Integer>();
+        final TestObserver<Integer> to2 = new TestObserver<Integer>();
 
-        final TestObserver<Integer> ts1 = new TestObserver<Integer>() {
+        final TestObserver<Integer> to1 = new TestObserver<Integer>() {
             @Override
             public void onNext(Integer t) {
                 if (valueCount() == 2) {
@@ -219,7 +240,7 @@ public class ObservablePublishTest {
                         public void run() {
                             child2Unsubscribed.set(true);
                         }
-                    }).take(5).subscribe(ts2);
+                    }).take(5).subscribe(to2);
                 }
                 super.onNext(t);
             }
@@ -231,20 +252,20 @@ public class ObservablePublishTest {
                 child1Unsubscribed.set(true);
             }
         }).take(5)
-        .subscribe(ts1);
+        .subscribe(to1);
 
-        ts1.awaitTerminalEvent();
-        ts2.awaitTerminalEvent();
+        to1.awaitTerminalEvent();
+        to2.awaitTerminalEvent();
 
-        ts1.assertNoErrors();
-        ts2.assertNoErrors();
+        to1.assertNoErrors();
+        to2.assertNoErrors();
 
         assertTrue(sourceUnsubscribed.get());
         assertTrue(child1Unsubscribed.get());
         assertTrue(child2Unsubscribed.get());
 
-        ts1.assertValues(1, 2, 3, 4, 5);
-        ts2.assertValues(4, 5, 6, 7, 8);
+        to1.assertValues(1, 2, 3, 4, 5);
+        to2.assertValues(4, 5, 6, 7, 8);
 
         assertEquals(8, sourceEmission.get());
     }
@@ -269,47 +290,47 @@ public class ObservablePublishTest {
     public void testSubscribeAfterDisconnectThenConnect() {
         ConnectableObservable<Integer> source = Observable.just(1).publish();
 
-        TestObserver<Integer> ts1 = new TestObserver<Integer>();
+        TestObserver<Integer> to1 = new TestObserver<Integer>();
 
-        source.subscribe(ts1);
+        source.subscribe(to1);
 
-        Disposable s = source.connect();
+        Disposable connection = source.connect();
 
-        ts1.assertValue(1);
-        ts1.assertNoErrors();
-        ts1.assertTerminated();
+        to1.assertValue(1);
+        to1.assertNoErrors();
+        to1.assertTerminated();
 
-        TestObserver<Integer> ts2 = new TestObserver<Integer>();
+        TestObserver<Integer> to2 = new TestObserver<Integer>();
 
-        source.subscribe(ts2);
+        source.subscribe(to2);
 
-        Disposable s2 = source.connect();
+        Disposable connection2 = source.connect();
 
-        ts2.assertValue(1);
-        ts2.assertNoErrors();
-        ts2.assertTerminated();
+        to2.assertValue(1);
+        to2.assertNoErrors();
+        to2.assertTerminated();
 
-        System.out.println(s);
-        System.out.println(s2);
+        System.out.println(connection);
+        System.out.println(connection2);
     }
 
     @Test
     public void testNoSubscriberRetentionOnCompleted() {
         ObservablePublish<Integer> source = (ObservablePublish<Integer>)Observable.just(1).publish();
 
-        TestObserver<Integer> ts1 = new TestObserver<Integer>();
+        TestObserver<Integer> to1 = new TestObserver<Integer>();
 
-        source.subscribe(ts1);
+        source.subscribe(to1);
 
-        ts1.assertNoValues();
-        ts1.assertNoErrors();
-        ts1.assertNotComplete();
+        to1.assertNoValues();
+        to1.assertNoErrors();
+        to1.assertNotComplete();
 
         source.connect();
 
-        ts1.assertValue(1);
-        ts1.assertNoErrors();
-        ts1.assertTerminated();
+        to1.assertValue(1);
+        to1.assertNoErrors();
+        to1.assertTerminated();
 
         assertNull(source.current.get());
     }
@@ -326,18 +347,18 @@ public class ObservablePublishTest {
     public void testNoDisconnectSomeoneElse() {
         ConnectableObservable<Object> source = Observable.never().publish();
 
-        Disposable s1 = source.connect();
-        Disposable s2 = source.connect();
+        Disposable connection1 = source.connect();
+        Disposable connection2 = source.connect();
 
-        s1.dispose();
+        connection1.dispose();
 
-        Disposable s3 = source.connect();
+        Disposable connection3 = source.connect();
 
-        s2.dispose();
+        connection2.dispose();
 
-        assertTrue(checkPublishDisposed(s1));
-        assertTrue(checkPublishDisposed(s2));
-        assertFalse(checkPublishDisposed(s3));
+        assertTrue(checkPublishDisposed(connection1));
+        assertTrue(checkPublishDisposed(connection2));
+        assertFalse(checkPublishDisposed(connection3));
     }
 
     @SuppressWarnings("unchecked")
@@ -372,35 +393,36 @@ public class ObservablePublishTest {
 
         assertEquals(2, calls.get());
     }
+
     @Test
     public void testObserveOn() {
         ConnectableObservable<Integer> co = Observable.range(0, 1000).publish();
         Observable<Integer> obs = co.observeOn(Schedulers.computation());
         for (int i = 0; i < 1000; i++) {
             for (int j = 1; j < 6; j++) {
-                List<TestObserver<Integer>> tss = new ArrayList<TestObserver<Integer>>();
+                List<TestObserver<Integer>> tos = new ArrayList<TestObserver<Integer>>();
                 for (int k = 1; k < j; k++) {
-                    TestObserver<Integer> ts = new TestObserver<Integer>();
-                    tss.add(ts);
-                    obs.subscribe(ts);
+                    TestObserver<Integer> to = new TestObserver<Integer>();
+                    tos.add(to);
+                    obs.subscribe(to);
                 }
 
-                Disposable s = co.connect();
+                Disposable connection = co.connect();
 
-                for (TestObserver<Integer> ts : tss) {
-                    ts.awaitTerminalEvent(2, TimeUnit.SECONDS);
-                    ts.assertTerminated();
-                    ts.assertNoErrors();
-                    assertEquals(1000, ts.valueCount());
+                for (TestObserver<Integer> to : tos) {
+                    to.awaitTerminalEvent(2, TimeUnit.SECONDS);
+                    to.assertTerminated();
+                    to.assertNoErrors();
+                    assertEquals(1000, to.valueCount());
                 }
-                s.dispose();
+                connection.dispose();
             }
         }
     }
 
     @Test
     public void preNextConnect() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
 
             final ConnectableObservable<Integer> co = Observable.<Integer>empty().publish();
 
@@ -419,7 +441,7 @@ public class ObservablePublishTest {
 
     @Test
     public void connectRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
 
             final ConnectableObservable<Integer> co = Observable.<Integer>empty().publish();
 
@@ -459,7 +481,7 @@ public class ObservablePublishTest {
         try {
             co.connect(new Consumer<Disposable>() {
                 @Override
-                public void accept(Disposable s) throws Exception {
+                public void accept(Disposable d) throws Exception {
                     throw new TestException();
                 }
             });
@@ -470,7 +492,7 @@ public class ObservablePublishTest {
 
     @Test
     public void addRemoveRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
 
             final ConnectableObservable<Integer> co = Observable.<Integer>empty().publish();
 
@@ -552,7 +574,7 @@ public class ObservablePublishTest {
 
     @Test
     public void nextCancelRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
 
             final PublishSubject<Integer> ps = PublishSubject.create();
 
@@ -620,7 +642,7 @@ public class ObservablePublishTest {
 
     @Test
     public void subscribeDisconnectRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
 
             final PublishSubject<Integer> ps = PublishSubject.create();
 
@@ -706,8 +728,8 @@ public class ObservablePublishTest {
 
         new Observable<Integer>() {
             @Override
-            protected void subscribeActual(Observer<? super Integer> s) {
-                sub[0] = s;
+            protected void subscribeActual(Observer<? super Integer> observer) {
+                sub[0] = observer;
             }
         }
         .publish()
@@ -719,5 +741,42 @@ public class ObservablePublishTest {
         sub[0].onSubscribe(bs);
 
         assertTrue(bs.isDisposed());
+    }
+
+    @Test
+    public void doubleOnSubscribe() {
+        TestHelper.checkDoubleOnSubscribeObservable(new Function<Observable<Object>, ObservableSource<Object>>() {
+            @Override
+            public ObservableSource<Object> apply(final Observable<Object> o)
+                    throws Exception {
+                return Observable.<Integer>never().publish(new Function<Observable<Integer>, ObservableSource<Object>>() {
+                    @Override
+                    public ObservableSource<Object> apply(Observable<Integer> v)
+                            throws Exception {
+                        return o;
+                    }
+                });
+            }
+        }
+        );
+    }
+
+    @Test
+    public void disposedUpfront() {
+        ConnectableObservable<Integer> co = Observable.just(1)
+                .concatWith(Observable.<Integer>never())
+                .publish();
+
+        TestObserver<Integer> to1 = co.test();
+
+        TestObserver<Integer> to2 = co.test(true);
+
+        co.connect();
+
+        to1.assertValuesOnly(1);
+
+        to2.assertEmpty();
+
+        ((ObservablePublish<Integer>)co).current.get().remove(null);
     }
 }

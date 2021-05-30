@@ -25,7 +25,6 @@ import io.reactivex.functions.Function;
 import io.reactivex.internal.disposables.EmptyDisposable;
 import io.reactivex.internal.operators.observable.ObservableScalarXMap.ScalarDisposable;
 import io.reactivex.observers.TestObserver;
-import io.reactivex.schedulers.Schedulers;
 
 public class ObservableScalarXMapTest {
 
@@ -36,8 +35,8 @@ public class ObservableScalarXMapTest {
 
     static final class CallablePublisher implements ObservableSource<Integer>, Callable<Integer> {
         @Override
-        public void subscribe(Observer<? super Integer> s) {
-            EmptyDisposable.error(new TestException(), s);
+        public void subscribe(Observer<? super Integer> observer) {
+            EmptyDisposable.error(new TestException(), observer);
         }
 
         @Override
@@ -48,8 +47,8 @@ public class ObservableScalarXMapTest {
 
     static final class EmptyCallablePublisher implements ObservableSource<Integer>, Callable<Integer> {
         @Override
-        public void subscribe(Observer<? super Integer> s) {
-            EmptyDisposable.complete(s);
+        public void subscribe(Observer<? super Integer> observer) {
+            EmptyDisposable.complete(observer);
         }
 
         @Override
@@ -60,9 +59,9 @@ public class ObservableScalarXMapTest {
 
     static final class OneCallablePublisher implements ObservableSource<Integer>, Callable<Integer> {
         @Override
-        public void subscribe(Observer<? super Integer> s) {
-            ScalarDisposable<Integer> sd = new ScalarDisposable<Integer>(s, 1);
-            s.onSubscribe(sd);
+        public void subscribe(Observer<? super Integer> observer) {
+            ScalarDisposable<Integer> sd = new ScalarDisposable<Integer>(observer, 1);
+            observer.onSubscribe(sd);
             sd.run();
         }
 
@@ -74,85 +73,85 @@ public class ObservableScalarXMapTest {
 
     @Test
     public void tryScalarXMap() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
-        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new CallablePublisher(), ts, new Function<Integer, ObservableSource<Integer>>() {
+        TestObserver<Integer> to = new TestObserver<Integer>();
+        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new CallablePublisher(), to, new Function<Integer, ObservableSource<Integer>>() {
             @Override
             public ObservableSource<Integer> apply(Integer f) throws Exception {
                 return Observable.just(1);
             }
         }));
 
-        ts.assertFailure(TestException.class);
+        to.assertFailure(TestException.class);
     }
 
     @Test
     public void emptyXMap() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new EmptyCallablePublisher(), ts, new Function<Integer, ObservableSource<Integer>>() {
+        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new EmptyCallablePublisher(), to, new Function<Integer, ObservableSource<Integer>>() {
             @Override
             public ObservableSource<Integer> apply(Integer f) throws Exception {
                 return Observable.just(1);
             }
         }));
 
-        ts.assertResult();
+        to.assertResult();
     }
 
     @Test
     public void mapperCrashes() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new OneCallablePublisher(), ts, new Function<Integer, ObservableSource<Integer>>() {
+        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new OneCallablePublisher(), to, new Function<Integer, ObservableSource<Integer>>() {
             @Override
             public ObservableSource<Integer> apply(Integer f) throws Exception {
                 throw new TestException();
             }
         }));
 
-        ts.assertFailure(TestException.class);
+        to.assertFailure(TestException.class);
     }
 
     @Test
     public void mapperToJust() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new OneCallablePublisher(), ts, new Function<Integer, ObservableSource<Integer>>() {
+        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new OneCallablePublisher(), to, new Function<Integer, ObservableSource<Integer>>() {
             @Override
             public ObservableSource<Integer> apply(Integer f) throws Exception {
                 return Observable.just(1);
             }
         }));
 
-        ts.assertResult(1);
+        to.assertResult(1);
     }
 
     @Test
     public void mapperToEmpty() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new OneCallablePublisher(), ts, new Function<Integer, ObservableSource<Integer>>() {
+        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new OneCallablePublisher(), to, new Function<Integer, ObservableSource<Integer>>() {
             @Override
             public ObservableSource<Integer> apply(Integer f) throws Exception {
                 return Observable.empty();
             }
         }));
 
-        ts.assertResult();
+        to.assertResult();
     }
 
     @Test
     public void mapperToCrashingCallable() {
-        TestObserver<Integer> ts = new TestObserver<Integer>();
+        TestObserver<Integer> to = new TestObserver<Integer>();
 
-        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new OneCallablePublisher(), ts, new Function<Integer, ObservableSource<Integer>>() {
+        assertTrue(ObservableScalarXMap.tryScalarXMapSubscribe(new OneCallablePublisher(), to, new Function<Integer, ObservableSource<Integer>>() {
             @Override
             public ObservableSource<Integer> apply(Integer f) throws Exception {
                 return new CallablePublisher();
             }
         }));
 
-        ts.assertFailure(TestException.class);
+        to.assertFailure(TestException.class);
     }
 
     @Test
@@ -214,7 +213,7 @@ public class ObservableScalarXMapTest {
 
     @Test
     public void scalarDisposableRunDisposeRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             TestObserver<Integer> to = new TestObserver<Integer>();
             final ScalarDisposable<Integer> sd = new ScalarDisposable<Integer>(to, 1);
             to.onSubscribe(sd);
@@ -233,7 +232,7 @@ public class ObservableScalarXMapTest {
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 }

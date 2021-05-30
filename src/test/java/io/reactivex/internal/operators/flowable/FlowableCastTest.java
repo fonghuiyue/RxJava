@@ -27,46 +27,44 @@ public class FlowableCastTest {
     @Test
     public void testCast() {
         Flowable<?> source = Flowable.just(1, 2);
-        Flowable<Integer> observable = source.cast(Integer.class);
+        Flowable<Integer> flowable = source.cast(Integer.class);
 
-        Subscriber<Integer> observer = TestHelper.mockSubscriber();
+        Subscriber<Integer> subscriber = TestHelper.mockSubscriber();
 
-        observable.subscribe(observer);
+        flowable.subscribe(subscriber);
 
-        verify(observer, times(1)).onNext(1);
-        verify(observer, times(1)).onNext(1);
-        verify(observer, never()).onError(
-                any(Throwable.class));
-        verify(observer, times(1)).onComplete();
+        verify(subscriber, times(1)).onNext(1);
+        verify(subscriber, times(1)).onNext(1);
+        verify(subscriber, never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
     }
 
     @Test
     public void testCastWithWrongType() {
         Flowable<?> source = Flowable.just(1, 2);
-        Flowable<Boolean> observable = source.cast(Boolean.class);
+        Flowable<Boolean> flowable = source.cast(Boolean.class);
 
-        Subscriber<Boolean> observer = TestHelper.mockSubscriber();
+        Subscriber<Boolean> subscriber = TestHelper.mockSubscriber();
 
-        observable.subscribe(observer);
+        flowable.subscribe(subscriber);
 
-        verify(observer, times(1)).onError(
-                any(ClassCastException.class));
+        verify(subscriber, times(1)).onError(any(ClassCastException.class));
     }
 
     @Test
     public void castCrashUnsubscribes() {
 
-        PublishProcessor<Integer> ps = PublishProcessor.create();
+        PublishProcessor<Integer> pp = PublishProcessor.create();
 
         TestSubscriber<String> ts = TestSubscriber.create();
 
-        ps.cast(String.class).subscribe(ts);
+        pp.cast(String.class).subscribe(ts);
 
-        Assert.assertTrue("Not subscribed?", ps.hasSubscribers());
+        Assert.assertTrue("Not subscribed?", pp.hasSubscribers());
 
-        ps.onNext(1);
+        pp.onNext(1);
 
-        Assert.assertFalse("Subscribed?", ps.hasSubscribers());
+        Assert.assertFalse("Subscribed?", pp.hasSubscribers());
 
         ts.assertError(ClassCastException.class);
     }

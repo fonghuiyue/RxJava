@@ -15,7 +15,6 @@
  */
 package io.reactivex.internal.operators.flowable;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
@@ -34,7 +33,7 @@ import io.reactivex.processors.PublishProcessor;
 import io.reactivex.subscribers.TestSubscriber;
 
 public class FlowableJoinTest {
-    Subscriber<Object> observer = TestHelper.mockSubscriber();
+    Subscriber<Object> subscriber = TestHelper.mockSubscriber();
 
     BiFunction<Integer, Integer, Integer> add = new BiFunction<Integer, Integer, Integer>() {
         @Override
@@ -43,11 +42,11 @@ public class FlowableJoinTest {
         }
     };
 
-    <T> Function<Integer, Flowable<T>> just(final Flowable<T> observable) {
+    <T> Function<Integer, Flowable<T>> just(final Flowable<T> flowable) {
         return new Function<Integer, Flowable<T>>() {
             @Override
             public Flowable<T> apply(Integer t1) {
-                return observable;
+                return flowable;
             }
         };
     }
@@ -66,7 +65,7 @@ public class FlowableJoinTest {
                 just(Flowable.never()),
                 just(Flowable.never()), add);
 
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
         source1.onNext(2);
@@ -79,18 +78,18 @@ public class FlowableJoinTest {
         source1.onComplete();
         source2.onComplete();
 
-        verify(observer, times(1)).onNext(17);
-        verify(observer, times(1)).onNext(18);
-        verify(observer, times(1)).onNext(20);
-        verify(observer, times(1)).onNext(33);
-        verify(observer, times(1)).onNext(34);
-        verify(observer, times(1)).onNext(36);
-        verify(observer, times(1)).onNext(65);
-        verify(observer, times(1)).onNext(66);
-        verify(observer, times(1)).onNext(68);
+        verify(subscriber, times(1)).onNext(17);
+        verify(subscriber, times(1)).onNext(18);
+        verify(subscriber, times(1)).onNext(20);
+        verify(subscriber, times(1)).onNext(33);
+        verify(subscriber, times(1)).onNext(34);
+        verify(subscriber, times(1)).onNext(36);
+        verify(subscriber, times(1)).onNext(65);
+        verify(subscriber, times(1)).onNext(66);
+        verify(subscriber, times(1)).onNext(68);
 
-        verify(observer, times(1)).onComplete();
-        verify(observer, never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
+        verify(subscriber, never()).onError(any(Throwable.class));
     }
 
     @Test
@@ -103,7 +102,7 @@ public class FlowableJoinTest {
         Flowable<Integer> m = source1.join(source2,
                 just(duration1),
                 just(Flowable.never()), add);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
         source1.onNext(2);
@@ -117,13 +116,13 @@ public class FlowableJoinTest {
         source1.onComplete();
         source2.onComplete();
 
-        verify(observer, times(1)).onNext(17);
-        verify(observer, times(1)).onNext(18);
-        verify(observer, times(1)).onNext(20);
-        verify(observer, times(1)).onNext(24);
+        verify(subscriber, times(1)).onNext(17);
+        verify(subscriber, times(1)).onNext(18);
+        verify(subscriber, times(1)).onNext(20);
+        verify(subscriber, times(1)).onNext(24);
 
-        verify(observer, times(1)).onComplete();
-        verify(observer, never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
+        verify(subscriber, never()).onError(any(Throwable.class));
 
     }
 
@@ -136,7 +135,7 @@ public class FlowableJoinTest {
                 just(Flowable.never()),
                 just(Flowable.never()), add);
 
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
         source1.onNext(2);
@@ -148,15 +147,15 @@ public class FlowableJoinTest {
 
         source2.onComplete();
 
-        verify(observer, times(1)).onNext(17);
-        verify(observer, times(1)).onNext(18);
-        verify(observer, times(1)).onNext(33);
-        verify(observer, times(1)).onNext(34);
-        verify(observer, times(1)).onNext(65);
-        verify(observer, times(1)).onNext(66);
+        verify(subscriber, times(1)).onNext(17);
+        verify(subscriber, times(1)).onNext(18);
+        verify(subscriber, times(1)).onNext(33);
+        verify(subscriber, times(1)).onNext(34);
+        verify(subscriber, times(1)).onNext(65);
+        verify(subscriber, times(1)).onNext(66);
 
-        verify(observer, times(1)).onComplete();
-        verify(observer, never()).onError(any(Throwable.class));
+        verify(subscriber, times(1)).onComplete();
+        verify(subscriber, never()).onError(any(Throwable.class));
     }
 
     @Test
@@ -168,14 +167,14 @@ public class FlowableJoinTest {
                 just(Flowable.never()),
                 just(Flowable.never()), add);
 
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source2.onNext(1);
         source1.onError(new RuntimeException("Forced failure"));
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -187,14 +186,14 @@ public class FlowableJoinTest {
                 just(Flowable.never()),
                 just(Flowable.never()), add);
 
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
         source2.onError(new RuntimeException("Forced failure"));
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -207,13 +206,13 @@ public class FlowableJoinTest {
         Flowable<Integer> m = source1.join(source2,
                 just(duration1),
                 just(Flowable.never()), add);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -226,13 +225,13 @@ public class FlowableJoinTest {
         Flowable<Integer> m = source1.join(source2,
                 just(Flowable.never()),
                 just(duration1), add);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source2.onNext(1);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -250,13 +249,13 @@ public class FlowableJoinTest {
         Flowable<Integer> m = source1.join(source2,
                 fail,
                 just(Flowable.never()), add);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -274,13 +273,13 @@ public class FlowableJoinTest {
         Flowable<Integer> m = source1.join(source2,
                 just(Flowable.never()),
                 fail, add);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source2.onNext(1);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -298,14 +297,14 @@ public class FlowableJoinTest {
         Flowable<Integer> m = source1.join(source2,
                 just(Flowable.never()),
                 just(Flowable.never()), fail);
-        m.subscribe(observer);
+        m.subscribe(subscriber);
 
         source1.onNext(1);
         source2.onNext(2);
 
-        verify(observer, times(1)).onError(any(Throwable.class));
-        verify(observer, never()).onComplete();
-        verify(observer, never()).onNext(any());
+        verify(subscriber, times(1)).onError(any(Throwable.class));
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, never()).onNext(any());
     }
 
     @Test
@@ -339,9 +338,9 @@ public class FlowableJoinTest {
 
     @Test
     public void rightClose() {
-        PublishProcessor<Integer> ps = PublishProcessor.create();
+        PublishProcessor<Integer> pp = PublishProcessor.create();
 
-        TestSubscriber<Integer> to = ps.join(Flowable.just(2),
+        TestSubscriber<Integer> ts = pp.join(Flowable.just(2),
                 Functions.justFunction(Flowable.never()),
                 Functions.justFunction(Flowable.empty()),
                 new BiFunction<Integer, Integer, Integer>() {
@@ -353,16 +352,16 @@ public class FlowableJoinTest {
         .test()
         .assertEmpty();
 
-        ps.onNext(1);
+        pp.onNext(1);
 
-        to.assertEmpty();
+        ts.assertEmpty();
     }
 
     @Test
     public void resultSelectorThrows2() {
-        PublishProcessor<Integer> ps = PublishProcessor.create();
+        PublishProcessor<Integer> pp = PublishProcessor.create();
 
-        TestSubscriber<Integer> to = ps.join(
+        TestSubscriber<Integer> ts = pp.join(
                 Flowable.just(2),
                 Functions.justFunction(Flowable.never()),
                 Functions.justFunction(Flowable.never()),
@@ -374,10 +373,10 @@ public class FlowableJoinTest {
                 })
         .test();
 
-        ps.onNext(1);
-        ps.onComplete();
+        pp.onNext(1);
+        pp.onComplete();
 
-        to.assertFailure(TestException.class);
+        ts.assertFailure(TestException.class);
     }
 
     @Test
@@ -386,10 +385,10 @@ public class FlowableJoinTest {
         try {
             new Flowable<Integer>() {
                 @Override
-                protected void subscribeActual(Subscriber<? super Integer> observer) {
-                    observer.onSubscribe(new BooleanSubscription());
-                    observer.onError(new TestException("First"));
-                    observer.onError(new TestException("Second"));
+                protected void subscribeActual(Subscriber<? super Integer> subscriber) {
+                    subscriber.onSubscribe(new BooleanSubscription());
+                    subscriber.onError(new TestException("First"));
+                    subscriber.onError(new TestException("Second"));
                 }
             }
             .join(Flowable.just(2),
@@ -417,15 +416,15 @@ public class FlowableJoinTest {
             @SuppressWarnings("rawtypes")
             final Subscriber[] o = { null };
 
-            TestSubscriber<Integer> to = Flowable.just(1)
+            TestSubscriber<Integer> ts = Flowable.just(1)
             .join(Flowable.just(2),
                     Functions.justFunction(Flowable.never()),
                     Functions.justFunction(new Flowable<Integer>() {
                         @Override
-                        protected void subscribeActual(Subscriber<? super Integer> observer) {
-                            o[0] = observer;
-                            observer.onSubscribe(new BooleanSubscription());
-                            observer.onError(new TestException("First"));
+                        protected void subscribeActual(Subscriber<? super Integer> subscriber) {
+                            o[0] = subscriber;
+                            subscriber.onSubscribe(new BooleanSubscription());
+                            subscriber.onError(new TestException("First"));
                         }
                     }),
                     new BiFunction<Integer, Integer, Integer>() {
@@ -438,7 +437,7 @@ public class FlowableJoinTest {
 
             o[0].onError(new TestException("Second"));
 
-            to
+            ts
             .assertFailureAndMessage(TestException.class, "First");
 
             TestHelper.assertUndeliverable(errors, 0, TestException.class, "Second");

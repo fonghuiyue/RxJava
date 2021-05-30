@@ -16,15 +16,18 @@ package io.reactivex.internal.operators.observable;
 import static org.junit.Assert.*;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.*;
 
 import io.reactivex.Observable;
 import io.reactivex.ObservableSource;
 import io.reactivex.Observer;
-import io.reactivex.disposables.Disposables;
+import io.reactivex.disposables.*;
 import io.reactivex.exceptions.TestException;
 import io.reactivex.internal.operators.observable.BlockingObservableIterable.BlockingObservableIterator;
+import io.reactivex.schedulers.Schedulers;
+import io.reactivex.subjects.PublishSubject;
 
 public class BlockingObservableToIteratorTest {
 
@@ -34,16 +37,16 @@ public class BlockingObservableToIteratorTest {
 
         Iterator<String> it = obs.blockingIterable().iterator();
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         assertEquals("one", it.next());
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         assertEquals("two", it.next());
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         assertEquals("three", it.next());
 
-        assertEquals(false, it.hasNext());
+        assertFalse(it.hasNext());
 
     }
 
@@ -61,10 +64,10 @@ public class BlockingObservableToIteratorTest {
 
         Iterator<String> it = obs.blockingIterable().iterator();
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         assertEquals("one", it.next());
 
-        assertEquals(true, it.hasNext());
+        assertTrue(it.hasNext());
         it.next();
     }
 
@@ -118,5 +121,29 @@ public class BlockingObservableToIteratorTest {
     public void remove() {
         BlockingObservableIterator<Integer> it = new BlockingObservableIterator<Integer>(128);
         it.remove();
+    }
+
+    @Test(expected = NoSuchElementException.class)
+    public void disposedIteratorHasNextReturns() {
+        Iterator<Integer> it = PublishSubject.<Integer>create()
+                .blockingIterable().iterator();
+        ((Disposable)it).dispose();
+        assertFalse(it.hasNext());
+        it.next();
+    }
+
+    @Test
+    public void asyncDisposeUnblocks() {
+        final Iterator<Integer> it = PublishSubject.<Integer>create()
+                .blockingIterable().iterator();
+
+        Schedulers.single().scheduleDirect(new Runnable() {
+            @Override
+            public void run() {
+                ((Disposable)it).dispose();
+            }
+        }, 1, TimeUnit.SECONDS);
+
+        assertFalse(it.hasNext());
     }
 }

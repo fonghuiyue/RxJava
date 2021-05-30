@@ -21,34 +21,35 @@ import io.reactivex.internal.disposables.SequentialDisposable;
 
 public final class SingleDelay<T> extends Single<T> {
 
-
     final SingleSource<? extends T> source;
     final long time;
     final TimeUnit unit;
     final Scheduler scheduler;
+    final boolean delayError;
 
-    public SingleDelay(SingleSource<? extends T> source, long time, TimeUnit unit, Scheduler scheduler) {
+    public SingleDelay(SingleSource<? extends T> source, long time, TimeUnit unit, Scheduler scheduler, boolean delayError) {
         this.source = source;
         this.time = time;
         this.unit = unit;
         this.scheduler = scheduler;
+        this.delayError = delayError;
     }
 
     @Override
-    protected void subscribeActual(final SingleObserver<? super T> s) {
+    protected void subscribeActual(final SingleObserver<? super T> observer) {
 
         final SequentialDisposable sd = new SequentialDisposable();
-        s.onSubscribe(sd);
-        source.subscribe(new Delay(sd, s));
+        observer.onSubscribe(sd);
+        source.subscribe(new Delay(sd, observer));
     }
 
     final class Delay implements SingleObserver<T> {
         private final SequentialDisposable sd;
-        final SingleObserver<? super T> s;
+        final SingleObserver<? super T> downstream;
 
-        Delay(SequentialDisposable sd, SingleObserver<? super T> s) {
+        Delay(SequentialDisposable sd, SingleObserver<? super T> observer) {
             this.sd = sd;
-            this.s = s;
+            this.downstream = observer;
         }
 
         @Override
@@ -63,7 +64,7 @@ public final class SingleDelay<T> extends Single<T> {
 
         @Override
         public void onError(final Throwable e) {
-            sd.replace(scheduler.scheduleDirect(new OnError(e), 0, unit));
+            sd.replace(scheduler.scheduleDirect(new OnError(e), delayError ? time : 0, unit));
         }
 
         final class OnSuccess implements Runnable {
@@ -75,7 +76,7 @@ public final class SingleDelay<T> extends Single<T> {
 
             @Override
             public void run() {
-                s.onSuccess(value);
+                downstream.onSuccess(value);
             }
         }
 
@@ -88,7 +89,7 @@ public final class SingleDelay<T> extends Single<T> {
 
             @Override
             public void run() {
-                s.onError(e);
+                downstream.onError(e);
             }
         }
     }

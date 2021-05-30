@@ -14,7 +14,6 @@
 package io.reactivex.internal.operators.flowable;
 
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
@@ -29,17 +28,18 @@ import io.reactivex.functions.*;
 import io.reactivex.internal.fuseable.HasUpstreamPublisher;
 import io.reactivex.internal.subscriptions.BooleanSubscription;
 import io.reactivex.plugins.RxJavaPlugins;
+import io.reactivex.processors.PublishProcessor;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subscribers.TestSubscriber;
 
 public class FlowableReduceTest {
-    Subscriber<Object> observer;
+    Subscriber<Object> subscriber;
 
     SingleObserver<Object> singleObserver;
 
     @Before
     public void before() {
-        observer = TestHelper.mockSubscriber();
+        subscriber = TestHelper.mockSubscriber();
         singleObserver = TestHelper.mockSingleObserver();
     }
 
@@ -61,11 +61,11 @@ public class FlowableReduceTest {
                     }
                 });
 
-        result.subscribe(observer);
+        result.subscribe(subscriber);
 
-        verify(observer).onNext(1 + 2 + 3 + 4 + 5);
-        verify(observer).onComplete();
-        verify(observer, never()).onError(any(Throwable.class));
+        verify(subscriber).onNext(1 + 2 + 3 + 4 + 5);
+        verify(subscriber).onComplete();
+        verify(subscriber, never()).onError(any(Throwable.class));
     }
 
     @Test
@@ -79,11 +79,11 @@ public class FlowableReduceTest {
                     }
                 });
 
-        result.subscribe(observer);
+        result.subscribe(subscriber);
 
-        verify(observer, never()).onNext(any());
-        verify(observer, never()).onComplete();
-        verify(observer, times(1)).onError(any(TestException.class));
+        verify(subscriber, never()).onNext(any());
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, times(1)).onError(any(TestException.class));
     }
 
     @Test
@@ -103,11 +103,11 @@ public class FlowableReduceTest {
                     }
                 });
 
-        result.subscribe(observer);
+        result.subscribe(subscriber);
 
-        verify(observer, never()).onNext(any());
-        verify(observer, never()).onComplete();
-        verify(observer, times(1)).onError(any(TestException.class));
+        verify(subscriber, never()).onNext(any());
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, times(1)).onError(any(TestException.class));
     }
 
     @Test
@@ -124,11 +124,11 @@ public class FlowableReduceTest {
         Flowable<Integer> result = Flowable.just(1, 2, 3, 4, 5)
                 .reduce(0, sum).toFlowable().map(error);
 
-        result.subscribe(observer);
+        result.subscribe(subscriber);
 
-        verify(observer, never()).onNext(any());
-        verify(observer, never()).onComplete();
-        verify(observer, times(1)).onError(any(TestException.class));
+        verify(subscriber, never()).onNext(any());
+        verify(subscriber, never()).onComplete();
+        verify(subscriber, times(1)).onError(any(TestException.class));
     }
 
     @Test
@@ -139,7 +139,6 @@ public class FlowableReduceTest {
         Integer r = reduced.blockingFirst();
         assertEquals(21, r.intValue());
     }
-
 
     @Test
     public void testAggregateAsIntSum() {
@@ -388,7 +387,8 @@ public class FlowableReduceTest {
     }
 
     /**
-     * https://gist.github.com/jurna/353a2bd8ff83f0b24f0b5bc772077d61
+     * Make sure an asynchronous reduce with flatMap works.
+     * Original Reactor-Core test case: https://gist.github.com/jurna/353a2bd8ff83f0b24f0b5bc772077d61
      */
     @Test
     public void shouldReduceTo10Events() {
@@ -414,7 +414,8 @@ public class FlowableReduceTest {
                     @Override
                     public void accept(String s) throws Exception {
                         count.incrementAndGet();
-                        System.out.println("Completed with " + s);}
+                        System.out.println("Completed with " + s);
+                    }
                 })
                 .toFlowable();
             }
@@ -425,7 +426,8 @@ public class FlowableReduceTest {
     }
 
     /**
-     * https://gist.github.com/jurna/353a2bd8ff83f0b24f0b5bc772077d61
+     * Make sure an asynchronous reduce with flatMap works.
+     * Original Reactor-Core test case: https://gist.github.com/jurna/353a2bd8ff83f0b24f0b5bc772077d61
      */
     @Test
     public void shouldReduceTo10EventsFlowable() {
@@ -452,7 +454,8 @@ public class FlowableReduceTest {
                     @Override
                     public void accept(String s) throws Exception {
                         count.incrementAndGet();
-                        System.out.println("Completed with " + s);}
+                        System.out.println("Completed with " + s);
+                    }
                 })
                 ;
             }
@@ -469,5 +472,60 @@ public class FlowableReduceTest {
             e.printStackTrace();
         }
         return "x" + x + "y" + y;
+    }
+
+    @Test
+    public void seedDoubleOnSubscribe() {
+        TestHelper.checkDoubleOnSubscribeFlowableToSingle(new Function<Flowable<Integer>, SingleSource<Integer>>() {
+            @Override
+            public SingleSource<Integer> apply(Flowable<Integer> f)
+                    throws Exception {
+                return f.reduce(0, new BiFunction<Integer, Integer, Integer>() {
+                    @Override
+                    public Integer apply(Integer a, Integer b) throws Exception {
+                        return a;
+                    }
+                });
+            }
+        });
+    }
+
+    @Test
+    public void seedDisposed() {
+        TestHelper.checkDisposed(PublishProcessor.<Integer>create().reduce(0, new BiFunction<Integer, Integer, Integer>() {
+                    @Override
+                    public Integer apply(Integer a, Integer b) throws Exception {
+                        return a;
+                    }
+                }));
+    }
+
+    @Test
+    public void seedBadSource() {
+        List<Throwable> errors = TestHelper.trackPluginErrors();
+        try {
+            new Flowable<Integer>() {
+                @Override
+                protected void subscribeActual(Subscriber<? super Integer> subscriber) {
+                    subscriber.onSubscribe(new BooleanSubscription());
+                    subscriber.onComplete();
+                    subscriber.onNext(1);
+                    subscriber.onError(new TestException());
+                    subscriber.onComplete();
+                }
+            }
+            .reduce(0, new BiFunction<Integer, Integer, Integer>() {
+                @Override
+                public Integer apply(Integer a, Integer b) throws Exception {
+                    return a;
+                }
+            })
+            .test()
+            .assertResult(0);
+
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
+        } finally {
+            RxJavaPlugins.reset();
+        }
     }
 }

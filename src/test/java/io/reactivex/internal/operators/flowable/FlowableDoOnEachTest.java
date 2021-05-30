@@ -14,7 +14,6 @@
 package io.reactivex.internal.operators.flowable;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
@@ -26,6 +25,7 @@ import org.reactivestreams.*;
 
 import io.reactivex.*;
 import io.reactivex.exceptions.*;
+import io.reactivex.flowables.ConnectableFlowable;
 import io.reactivex.functions.*;
 import io.reactivex.internal.functions.Functions;
 import io.reactivex.internal.fuseable.*;
@@ -36,35 +36,35 @@ import io.reactivex.subscribers.*;
 
 public class FlowableDoOnEachTest {
 
-    Subscriber<String> subscribedObserver;
-    Subscriber<String> sideEffectObserver;
+    Subscriber<String> subscribedSubscriber;
+    Subscriber<String> sideEffectSubscriber;
 
     @Before
     public void before() {
-        subscribedObserver = TestHelper.mockSubscriber();
-        sideEffectObserver = TestHelper.mockSubscriber();
+        subscribedSubscriber = TestHelper.mockSubscriber();
+        sideEffectSubscriber = TestHelper.mockSubscriber();
     }
 
     @Test
     public void testDoOnEach() {
         Flowable<String> base = Flowable.just("a", "b", "c");
-        Flowable<String> doOnEach = base.doOnEach(sideEffectObserver);
+        Flowable<String> doOnEach = base.doOnEach(sideEffectSubscriber);
 
-        doOnEach.subscribe(subscribedObserver);
+        doOnEach.subscribe(subscribedSubscriber);
 
         // ensure the leaf observer is still getting called
-        verify(subscribedObserver, never()).onError(any(Throwable.class));
-        verify(subscribedObserver, times(1)).onNext("a");
-        verify(subscribedObserver, times(1)).onNext("b");
-        verify(subscribedObserver, times(1)).onNext("c");
-        verify(subscribedObserver, times(1)).onComplete();
+        verify(subscribedSubscriber, never()).onError(any(Throwable.class));
+        verify(subscribedSubscriber, times(1)).onNext("a");
+        verify(subscribedSubscriber, times(1)).onNext("b");
+        verify(subscribedSubscriber, times(1)).onNext("c");
+        verify(subscribedSubscriber, times(1)).onComplete();
 
         // ensure our injected observer is getting called
-        verify(sideEffectObserver, never()).onError(any(Throwable.class));
-        verify(sideEffectObserver, times(1)).onNext("a");
-        verify(sideEffectObserver, times(1)).onNext("b");
-        verify(sideEffectObserver, times(1)).onNext("c");
-        verify(sideEffectObserver, times(1)).onComplete();
+        verify(sideEffectSubscriber, never()).onError(any(Throwable.class));
+        verify(sideEffectSubscriber, times(1)).onNext("a");
+        verify(sideEffectSubscriber, times(1)).onNext("b");
+        verify(sideEffectSubscriber, times(1)).onNext("c");
+        verify(sideEffectSubscriber, times(1)).onComplete();
     }
 
     @Test
@@ -80,20 +80,20 @@ public class FlowableDoOnEachTest {
             }
         });
 
-        Flowable<String> doOnEach = errs.doOnEach(sideEffectObserver);
+        Flowable<String> doOnEach = errs.doOnEach(sideEffectSubscriber);
 
-        doOnEach.subscribe(subscribedObserver);
-        verify(subscribedObserver, times(1)).onNext("one");
-        verify(subscribedObserver, never()).onNext("two");
-        verify(subscribedObserver, never()).onNext("three");
-        verify(subscribedObserver, never()).onComplete();
-        verify(subscribedObserver, times(1)).onError(any(Throwable.class));
+        doOnEach.subscribe(subscribedSubscriber);
+        verify(subscribedSubscriber, times(1)).onNext("one");
+        verify(subscribedSubscriber, never()).onNext("two");
+        verify(subscribedSubscriber, never()).onNext("three");
+        verify(subscribedSubscriber, never()).onComplete();
+        verify(subscribedSubscriber, times(1)).onError(any(Throwable.class));
 
-        verify(sideEffectObserver, times(1)).onNext("one");
-        verify(sideEffectObserver, never()).onNext("two");
-        verify(sideEffectObserver, never()).onNext("three");
-        verify(sideEffectObserver, never()).onComplete();
-        verify(sideEffectObserver, times(1)).onError(any(Throwable.class));
+        verify(sideEffectSubscriber, times(1)).onNext("one");
+        verify(sideEffectSubscriber, never()).onNext("two");
+        verify(sideEffectSubscriber, never()).onNext("three");
+        verify(sideEffectSubscriber, never()).onComplete();
+        verify(sideEffectSubscriber, times(1)).onError(any(Throwable.class));
     }
 
     @Test
@@ -108,12 +108,12 @@ public class FlowableDoOnEachTest {
             }
         });
 
-        doOnEach.subscribe(subscribedObserver);
-        verify(subscribedObserver, times(1)).onNext("one");
-        verify(subscribedObserver, times(1)).onNext("two");
-        verify(subscribedObserver, never()).onNext("three");
-        verify(subscribedObserver, never()).onComplete();
-        verify(subscribedObserver, times(1)).onError(any(Throwable.class));
+        doOnEach.subscribe(subscribedSubscriber);
+        verify(subscribedSubscriber, times(1)).onNext("one");
+        verify(subscribedSubscriber, times(1)).onNext("two");
+        verify(subscribedSubscriber, never()).onNext("three");
+        verify(subscribedSubscriber, never()).onComplete();
+        verify(subscribedSubscriber, times(1)).onError(any(Throwable.class));
 
     }
 
@@ -179,7 +179,7 @@ public class FlowableDoOnEachTest {
 //                        public Flowable<?> apply(Integer integer) {
 //                            return Flowable.create(new Publisher<Object>() {
 //                                @Override
-//                                public void subscribe(Subscriber<Object> o) {
+//                                public void subscribe(Subscriber<Object> subscriber) {
 //                                    throw new NullPointerException("Test NPE");
 //                                }
 //                            });
@@ -503,7 +503,7 @@ public class FlowableDoOnEachTest {
 
     @Test
     public void fused() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -523,7 +523,7 @@ public class FlowableDoOnEachTest {
         .subscribe(ts);
 
         ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.SYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.SYNC))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);
@@ -532,7 +532,7 @@ public class FlowableDoOnEachTest {
 
     @Test
     public void fusedOnErrorCrash() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0 };
 
@@ -552,7 +552,7 @@ public class FlowableDoOnEachTest {
         .subscribe(ts);
 
         ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.SYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.SYNC))
         .assertFailure(TestException.class);
 
         assertEquals(0, call[0]);
@@ -560,7 +560,7 @@ public class FlowableDoOnEachTest {
 
     @Test
     public void fusedConditional() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -581,7 +581,7 @@ public class FlowableDoOnEachTest {
         .subscribe(ts);
 
         ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.SYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.SYNC))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);
@@ -590,7 +590,7 @@ public class FlowableDoOnEachTest {
 
     @Test
     public void fusedOnErrorCrashConditional() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0 };
 
@@ -611,7 +611,7 @@ public class FlowableDoOnEachTest {
         .subscribe(ts);
 
         ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.SYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.SYNC))
         .assertFailure(TestException.class);
 
         assertEquals(0, call[0]);
@@ -619,7 +619,7 @@ public class FlowableDoOnEachTest {
 
     @Test
     public void fusedAsync() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -643,7 +643,7 @@ public class FlowableDoOnEachTest {
         TestHelper.emit(up, 1, 2, 3, 4, 5);
 
         ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.ASYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);
@@ -652,7 +652,7 @@ public class FlowableDoOnEachTest {
 
     @Test
     public void fusedAsyncConditional() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -677,7 +677,7 @@ public class FlowableDoOnEachTest {
         TestHelper.emit(up, 1, 2, 3, 4, 5);
 
         ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.ASYNC))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.ASYNC))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);
@@ -686,7 +686,7 @@ public class FlowableDoOnEachTest {
 
     @Test
     public void fusedAsyncConditional2() {
-        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueSubscription.ANY);
+        TestSubscriber<Integer> ts = SubscriberFusion.newTest(QueueFuseable.ANY);
 
         final int[] call = { 0, 0 };
 
@@ -711,7 +711,7 @@ public class FlowableDoOnEachTest {
         TestHelper.emit(up, 1, 2, 3, 4, 5);
 
         ts.assertOf(SubscriberFusion.<Integer>assertFuseable())
-        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueSubscription.NONE))
+        .assertOf(SubscriberFusion.<Integer>assertFusionMode(QueueFuseable.NONE))
         .assertResult(1, 2, 3, 4, 5);
 
         assertEquals(5, call[0]);
@@ -727,9 +727,202 @@ public class FlowableDoOnEachTest {
     public void doubleOnSubscribe() {
         TestHelper.checkDoubleOnSubscribeFlowable(new Function<Flowable<Object>, Flowable<Object>>() {
             @Override
-            public Flowable<Object> apply(Flowable<Object> o) throws Exception {
-                return o.doOnEach(new TestSubscriber<Object>());
+            public Flowable<Object> apply(Flowable<Object> f) throws Exception {
+                return f.doOnEach(new TestSubscriber<Object>());
             }
         });
+    }
+
+    @Test
+    public void doOnNextDoOnErrorFused() {
+        ConnectableFlowable<Integer> cf = Flowable.just(1)
+        .doOnNext(new Consumer<Integer>() {
+            @Override
+            public void accept(Integer v) throws Exception {
+                throw new TestException("First");
+            }
+        })
+        .doOnError(new Consumer<Throwable>() {
+            @Override
+            public void accept(Throwable e) throws Exception {
+                throw new TestException("Second");
+            }
+        })
+        .publish();
+
+        TestSubscriber<Integer> ts = cf.test();
+        cf.connect();
+
+        ts.assertFailure(CompositeException.class);
+
+        TestHelper.assertError(ts, 0, TestException.class, "First");
+        TestHelper.assertError(ts, 1, TestException.class, "Second");
+    }
+
+    @Test
+    public void doOnNextDoOnErrorCombinedFused() {
+        ConnectableFlowable<Integer> cf = Flowable.just(1)
+                .compose(new FlowableTransformer<Integer, Integer>() {
+                    @Override
+                    public Publisher<Integer> apply(Flowable<Integer> v) {
+                        return new FlowableDoOnEach<Integer>(v,
+                                new Consumer<Integer>() {
+                                    @Override
+                                    public void accept(Integer v) throws Exception {
+                                        throw new TestException("First");
+                                    }
+                                },
+                                new Consumer<Throwable>() {
+                                    @Override
+                                    public void accept(Throwable e) throws Exception {
+                                        throw new TestException("Second");
+                                    }
+                                },
+                                Functions.EMPTY_ACTION
+                                ,
+                                Functions.EMPTY_ACTION
+                                );
+                    }
+                })
+        .publish();
+
+        TestSubscriber<Integer> ts = cf.test();
+        cf.connect();
+
+        ts.assertFailure(CompositeException.class);
+
+        TestHelper.assertError(ts, 0, TestException.class, "First");
+        TestHelper.assertError(ts, 1, TestException.class, "Second");
+    }
+
+    @Test
+    public void doOnNextDoOnErrorFused2() {
+        ConnectableFlowable<Integer> cf = Flowable.just(1)
+        .doOnNext(new Consumer<Integer>() {
+            @Override
+            public void accept(Integer v) throws Exception {
+                throw new TestException("First");
+            }
+        })
+        .doOnError(new Consumer<Throwable>() {
+            @Override
+            public void accept(Throwable e) throws Exception {
+                throw new TestException("Second");
+            }
+        })
+        .doOnError(new Consumer<Throwable>() {
+            @Override
+            public void accept(Throwable e) throws Exception {
+                throw new TestException("Third");
+            }
+        })
+        .publish();
+
+        TestSubscriber<Integer> ts = cf.test();
+        cf.connect();
+
+        ts.assertFailure(CompositeException.class);
+
+        TestHelper.assertError(ts, 0, TestException.class, "First");
+        TestHelper.assertError(ts, 1, TestException.class, "Second");
+        TestHelper.assertError(ts, 2, TestException.class, "Third");
+    }
+
+    @Test
+    public void doOnNextDoOnErrorFusedConditional() {
+        ConnectableFlowable<Integer> cf = Flowable.just(1)
+        .doOnNext(new Consumer<Integer>() {
+            @Override
+            public void accept(Integer v) throws Exception {
+                throw new TestException("First");
+            }
+        })
+        .doOnError(new Consumer<Throwable>() {
+            @Override
+            public void accept(Throwable e) throws Exception {
+                throw new TestException("Second");
+            }
+        })
+        .filter(Functions.alwaysTrue())
+        .publish();
+
+        TestSubscriber<Integer> ts = cf.test();
+        cf.connect();
+
+        ts.assertFailure(CompositeException.class);
+
+        TestHelper.assertError(ts, 0, TestException.class, "First");
+        TestHelper.assertError(ts, 1, TestException.class, "Second");
+    }
+
+    @Test
+    public void doOnNextDoOnErrorFusedConditional2() {
+        ConnectableFlowable<Integer> cf = Flowable.just(1)
+        .doOnNext(new Consumer<Integer>() {
+            @Override
+            public void accept(Integer v) throws Exception {
+                throw new TestException("First");
+            }
+        })
+        .doOnError(new Consumer<Throwable>() {
+            @Override
+            public void accept(Throwable e) throws Exception {
+                throw new TestException("Second");
+            }
+        })
+        .doOnError(new Consumer<Throwable>() {
+            @Override
+            public void accept(Throwable e) throws Exception {
+                throw new TestException("Third");
+            }
+        })
+        .filter(Functions.alwaysTrue())
+        .publish();
+
+        TestSubscriber<Integer> ts = cf.test();
+        cf.connect();
+
+        ts.assertFailure(CompositeException.class);
+
+        TestHelper.assertError(ts, 0, TestException.class, "First");
+        TestHelper.assertError(ts, 1, TestException.class, "Second");
+        TestHelper.assertError(ts, 2, TestException.class, "Third");
+    }
+
+    @Test
+    public void doOnNextDoOnErrorCombinedFusedConditional() {
+        ConnectableFlowable<Integer> cf = Flowable.just(1)
+                .compose(new FlowableTransformer<Integer, Integer>() {
+                    @Override
+                    public Publisher<Integer> apply(Flowable<Integer> v) {
+                        return new FlowableDoOnEach<Integer>(v,
+                                new Consumer<Integer>() {
+                                    @Override
+                                    public void accept(Integer v) throws Exception {
+                                        throw new TestException("First");
+                                    }
+                                },
+                                new Consumer<Throwable>() {
+                                    @Override
+                                    public void accept(Throwable e) throws Exception {
+                                        throw new TestException("Second");
+                                    }
+                                },
+                                Functions.EMPTY_ACTION
+                                ,
+                                Functions.EMPTY_ACTION
+                                );
+                    }
+                })
+        .filter(Functions.alwaysTrue())
+        .publish();
+
+        TestSubscriber<Integer> ts = cf.test();
+        cf.connect();
+
+        ts.assertFailure(CompositeException.class);
+
+        TestHelper.assertError(ts, 0, TestException.class, "First");
+        TestHelper.assertError(ts, 1, TestException.class, "Second");
     }
 }

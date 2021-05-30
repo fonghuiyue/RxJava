@@ -24,7 +24,6 @@ import io.reactivex.functions.*;
 import io.reactivex.internal.functions.Functions;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.processors.PublishProcessor;
-import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subscribers.TestSubscriber;
 
 public class MaybeCacheTest {
@@ -53,7 +52,6 @@ public class MaybeCacheTest {
         .assertFailure(TestException.class);
     }
 
-
     @Test
     public void offlineComplete() {
         Maybe<Integer> source = Maybe.<Integer>empty().cache();
@@ -74,7 +72,7 @@ public class MaybeCacheTest {
 
         assertNotNull(((MaybeCache<Integer>)source).source.get());
 
-        TestObserver<Integer> ts = source.test();
+        TestObserver<Integer> to = source.test();
 
         assertNull(((MaybeCache<Integer>)source).source.get());
 
@@ -82,12 +80,12 @@ public class MaybeCacheTest {
 
         source.test(true).assertEmpty();
 
-        ts.assertEmpty();
+        to.assertEmpty();
 
         pp.onNext(1);
         pp.onComplete();
 
-        ts.assertResult(1);
+        to.assertResult(1);
 
         source.test().assertResult(1);
 
@@ -104,7 +102,7 @@ public class MaybeCacheTest {
 
         assertNotNull(((MaybeCache<Integer>)source).source.get());
 
-        TestObserver<Integer> ts = source.test();
+        TestObserver<Integer> to = source.test();
 
         assertNull(((MaybeCache<Integer>)source).source.get());
 
@@ -112,11 +110,11 @@ public class MaybeCacheTest {
 
         source.test(true).assertEmpty();
 
-        ts.assertEmpty();
+        to.assertEmpty();
 
         pp.onError(new TestException());
 
-        ts.assertFailure(TestException.class);
+        to.assertFailure(TestException.class);
 
         source.test().assertFailure(TestException.class);
 
@@ -133,7 +131,7 @@ public class MaybeCacheTest {
 
         assertNotNull(((MaybeCache<Integer>)source).source.get());
 
-        TestObserver<Integer> ts = source.test();
+        TestObserver<Integer> to = source.test();
 
         assertNull(((MaybeCache<Integer>)source).source.get());
 
@@ -141,11 +139,11 @@ public class MaybeCacheTest {
 
         source.test(true).assertEmpty();
 
-        ts.assertEmpty();
+        to.assertEmpty();
 
         pp.onComplete();
 
-        ts.assertResult();
+        to.assertResult();
 
         source.test().assertResult();
 
@@ -224,7 +222,7 @@ public class MaybeCacheTest {
 
     @Test
     public void addAddRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             PublishProcessor<Integer> pp = PublishProcessor.create();
 
             final Maybe<Integer> source = pp.singleElement().cache();
@@ -236,35 +234,35 @@ public class MaybeCacheTest {
                 }
             };
 
-            TestHelper.race(r, r, Schedulers.single());
+            TestHelper.race(r, r);
         }
     }
 
     @Test
     public void removeRemoveRace() {
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < TestHelper.RACE_DEFAULT_LOOPS; i++) {
             PublishProcessor<Integer> pp = PublishProcessor.create();
 
             final Maybe<Integer> source = pp.singleElement().cache();
 
-            final TestObserver<Integer> ts1 = source.test();
-            final TestObserver<Integer> ts2 = source.test();
+            final TestObserver<Integer> to1 = source.test();
+            final TestObserver<Integer> to2 = source.test();
 
             Runnable r1 = new Runnable() {
                 @Override
                 public void run() {
-                    ts1.cancel();
+                    to1.cancel();
                 }
             };
 
             Runnable r2 = new Runnable() {
                 @Override
                 public void run() {
-                    ts2.cancel();
+                    to2.cancel();
                 }
             };
 
-            TestHelper.race(r1, r2, Schedulers.single());
+            TestHelper.race(r1, r2);
         }
     }
 

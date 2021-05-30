@@ -51,13 +51,13 @@ import io.reactivex.internal.util.EndConsumerHelper;
  * <p>Implementation of {@link #onStart()}, {@link #onSuccess(Object)} and {@link #onError(Throwable)}
  * are not allowed to throw any unchecked exceptions.
  *
- * <p>Example<code><pre>
+ * <p>Example<pre><code>
  * Disposable d =
  *     Single.just(1).delay(1, TimeUnit.SECONDS)
- *     .subscribeWith(new ResourceSingleObserver&lt;Integer>() {
+ *     .subscribeWith(new ResourceSingleObserver&lt;Integer&gt;() {
  *         &#64;Override public void onStart() {
  *             add(Schedulers.single()
- *                 .scheduleDirect(() -> System.out.println("Time!"),
+ *                 .scheduleDirect(() -&gt; System.out.println("Time!"),
  *                     2, TimeUnit.SECONDS));
  *         }
  *         &#64;Override public void onSuccess(Integer t) {
@@ -71,13 +71,13 @@ import io.reactivex.internal.util.EndConsumerHelper;
  *     });
  * // ...
  * d.dispose();
- * </pre></code>
+ * </code></pre>
  *
  * @param <T> the value type
  */
 public abstract class ResourceSingleObserver<T> implements SingleObserver<T>, Disposable {
     /** The active subscription. */
-    private final AtomicReference<Disposable> s = new AtomicReference<Disposable>();
+    private final AtomicReference<Disposable> upstream = new AtomicReference<Disposable>();
 
     /** The resource composite, can never be null. */
     private final ListCompositeDisposable resources = new ListCompositeDisposable();
@@ -95,8 +95,8 @@ public abstract class ResourceSingleObserver<T> implements SingleObserver<T>, Di
     }
 
     @Override
-    public final void onSubscribe(@NonNull Disposable s) {
-        if (EndConsumerHelper.setOnce(this.s, s, getClass())) {
+    public final void onSubscribe(@NonNull Disposable d) {
+        if (EndConsumerHelper.setOnce(this.upstream, d, getClass())) {
             onStart();
         }
     }
@@ -119,7 +119,7 @@ public abstract class ResourceSingleObserver<T> implements SingleObserver<T>, Di
      */
     @Override
     public final void dispose() {
-        if (DisposableHelper.dispose(s)) {
+        if (DisposableHelper.dispose(upstream)) {
             resources.dispose();
         }
     }
@@ -130,6 +130,6 @@ public abstract class ResourceSingleObserver<T> implements SingleObserver<T>, Di
      */
     @Override
     public final boolean isDisposed() {
-        return DisposableHelper.isDisposed(s.get());
+        return DisposableHelper.isDisposed(upstream.get());
     }
 }

@@ -16,9 +16,10 @@ package io.reactivex.internal.operators.flowable;
 import java.util.concurrent.Callable;
 
 import org.junit.Test;
-import org.reactivestreams.Subscriber;
+import org.reactivestreams.*;
 
 import io.reactivex.*;
+import io.reactivex.exceptions.*;
 import io.reactivex.functions.Function;
 import io.reactivex.internal.functions.Functions;
 import io.reactivex.internal.operators.flowable.FlowableMapNotification.MapNotificationSubscriber;
@@ -103,9 +104,9 @@ public class FlowableMapNotificationTest {
     public void noBackpressure() {
         TestSubscriber<Object> ts = TestSubscriber.create(0L);
 
-        PublishProcessor<Integer> ps = PublishProcessor.create();
+        PublishProcessor<Integer> pp = PublishProcessor.create();
 
-        new FlowableMapNotification<Integer, Integer>(ps,
+        new FlowableMapNotification<Integer, Integer>(pp,
                 new Function<Integer, Integer>() {
                     @Override
                     public Integer apply(Integer item) {
@@ -130,10 +131,10 @@ public class FlowableMapNotificationTest {
         ts.assertNoErrors();
         ts.assertNotComplete();
 
-        ps.onNext(1);
-        ps.onNext(2);
-        ps.onNext(3);
-        ps.onComplete();
+        pp.onNext(1);
+        pp.onNext(2);
+        pp.onNext(3);
+        pp.onComplete();
 
         ts.assertNoValues();
         ts.assertNoErrors();
@@ -152,9 +153,9 @@ public class FlowableMapNotificationTest {
         TestHelper.checkDisposed(new Flowable<Integer>() {
             @SuppressWarnings({ "rawtypes", "unchecked" })
             @Override
-            protected void subscribeActual(Subscriber<? super Integer> observer) {
+            protected void subscribeActual(Subscriber<? super Integer> subscriber) {
                 MapNotificationSubscriber mn = new MapNotificationSubscriber(
-                        observer,
+                        subscriber,
                         Functions.justFunction(Flowable.just(1)),
                         Functions.justFunction(Flowable.just(2)),
                         Functions.justCallable(Flowable.just(3))
@@ -168,13 +169,31 @@ public class FlowableMapNotificationTest {
     public void doubleOnSubscribe() {
         TestHelper.checkDoubleOnSubscribeFlowable(new Function<Flowable<Object>, Flowable<Integer>>() {
             @Override
-            public Flowable<Integer> apply(Flowable<Object> o) throws Exception {
-                return o.flatMap(
+            public Flowable<Integer> apply(Flowable<Object> f) throws Exception {
+                return f.flatMap(
                         Functions.justFunction(Flowable.just(1)),
                         Functions.justFunction(Flowable.just(2)),
                         Functions.justCallable(Flowable.just(3))
                 );
             }
         });
+    }
+
+    @Test
+    public void onErrorCrash() {
+        TestSubscriber<Integer> ts = Flowable.<Integer>error(new TestException("Outer"))
+        .flatMap(Functions.justFunction(Flowable.just(1)),
+                new Function<Throwable, Publisher<Integer>>() {
+                    @Override
+                    public Publisher<Integer> apply(Throwable t) throws Exception {
+                        throw new TestException("Inner");
+                    }
+                },
+                Functions.justCallable(Flowable.just(3)))
+        .test()
+        .assertFailure(CompositeException.class);
+
+        TestHelper.assertError(ts, 0, TestException.class, "Outer");
+        TestHelper.assertError(ts, 1, TestException.class, "Inner");
     }
 }

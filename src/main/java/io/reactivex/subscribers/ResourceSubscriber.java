@@ -60,13 +60,13 @@ import io.reactivex.internal.util.EndConsumerHelper;
  * If for some reason this can't be avoided, use {@link io.reactivex.Flowable#safeSubscribe(org.reactivestreams.Subscriber)}
  * instead of the standard {@code subscribe()} method.
  *
- * <p>Example<code><pre>
+ * <p>Example<pre><code>
  * Disposable d =
  *     Flowable.range(1, 5)
- *     .subscribeWith(new ResourceSubscriber&lt;Integer>() {
+ *     .subscribeWith(new ResourceSubscriber&lt;Integer&gt;() {
  *         &#64;Override public void onStart() {
  *             add(Schedulers.single()
- *                 .scheduleDirect(() -> System.out.println("Time!"),
+ *                 .scheduleDirect(() -&gt; System.out.println("Time!"),
  *                     2, TimeUnit.SECONDS));
  *             request(1);
  *         }
@@ -88,13 +88,13 @@ import io.reactivex.internal.util.EndConsumerHelper;
  *     });
  * // ...
  * d.dispose();
- * </pre></code>
+ * </code></pre>
  *
  * @param <T> the value type
  */
 public abstract class ResourceSubscriber<T> implements FlowableSubscriber<T>, Disposable {
     /** The active subscription. */
-    private final AtomicReference<Subscription> s = new AtomicReference<Subscription>();
+    private final AtomicReference<Subscription> upstream = new AtomicReference<Subscription>();
 
     /** The resource composite, can never be null. */
     private final ListCompositeDisposable resources = new ListCompositeDisposable();
@@ -116,7 +116,7 @@ public abstract class ResourceSubscriber<T> implements FlowableSubscriber<T>, Di
 
     @Override
     public final void onSubscribe(Subscription s) {
-        if (EndConsumerHelper.setOnce(this.s, s, getClass())) {
+        if (EndConsumerHelper.setOnce(this.upstream, s, getClass())) {
             long r = missedRequested.getAndSet(0L);
             if (r != 0L) {
                 s.request(r);
@@ -144,7 +144,7 @@ public abstract class ResourceSubscriber<T> implements FlowableSubscriber<T>, Di
      * @param n the request amount, must be positive
      */
     protected final void request(long n) {
-        SubscriptionHelper.deferredRequest(s, missedRequested, n);
+        SubscriptionHelper.deferredRequest(upstream, missedRequested, n);
     }
 
     /**
@@ -156,7 +156,7 @@ public abstract class ResourceSubscriber<T> implements FlowableSubscriber<T>, Di
      */
     @Override
     public final void dispose() {
-        if (SubscriptionHelper.cancel(s)) {
+        if (SubscriptionHelper.cancel(upstream)) {
             resources.dispose();
         }
     }
@@ -167,6 +167,6 @@ public abstract class ResourceSubscriber<T> implements FlowableSubscriber<T>, Di
      */
     @Override
     public final boolean isDisposed() {
-        return SubscriptionHelper.isCancelled(s.get());
+        return upstream.get() == SubscriptionHelper.CANCELLED;
     }
 }
